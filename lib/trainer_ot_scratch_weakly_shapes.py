@@ -15,14 +15,8 @@ from tensorboard import program
 from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
 from transforms import *
 from torch.distributions.normal import Normal
-from .WavePDE import WavePDE
 from torch.autograd import grad
 
-angle_set = [0, 10, 20, 30, 40, 50, 60 , 70 ,80]
-color_set = [180, 200, 220, 240, 260, 280 ,300 , 320, 340]
-scale_set = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5 , 1.6 , 1.7, 1.8]
-mnist_trans = AddRandomTransformationDims(angle_set=angle_set,color_set=color_set,scale_set=scale_set)
-mnist_color = To_Color()
 
 def idx2onehot(idx, n):
     assert torch.max(idx).item() < n
@@ -114,9 +108,7 @@ class TrainerOTScratchWeaklyShapes(object):
             support_sets.load_state_dict(checkpoint_dict['support_sets'])
             prior.load_state_dict(checkpoint_dict['prior'])
             reconstructor.load_state_dict(checkpoint_dict['reconstructor'])
-            #state_dict_new = {}
-            #for k, v in checkpoint_dict['vae'].items():
-            #    state_dict_new[k[len("module.encoder."):]] = v
+
             generator.load_state_dict(checkpoint_dict['vae'])
         return starting_iter
 
@@ -163,8 +155,6 @@ class TrainerOTScratchWeaklyShapes(object):
             self.params.batch_size, iteration, self.params.max_iter), self.params.max_iter, iteration + 1)
         if iteration < self.params.max_iter - 1:
             print()
-        print("      \\__Batch accuracy Index      : {:.03f}".format(stats['accuracy_index']))
-        print("      \\__Batch accuracy Time      : {:.03f}".format(stats['accuracy_time']))
         print("      \\__Classification loss : {:.08f}".format(stats['classification_loss']))
         print("      \\__Regression loss     : {:.08f}".format(stats['regression_loss']))
         print("      \\__Total loss          : {:.08f}".format(stats['total_loss']))
@@ -285,7 +275,7 @@ class TrainerOTScratchWeaklyShapes(object):
                         x_t = data[t]
 
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
-                    energy,loss_wave_tmp, uz, uzz  = support_sets.index_forward(index_pred, z, time_stamp)
+                    energy,loss_pde_tmp, uz, uzz  = support_sets.index_forward(index_pred, z, time_stamp)
                     _, _, _, uzz_prior = prior.index_forward(index_pred, z, time_stamp, rho)
 
                     #Update rho and z
@@ -299,20 +289,18 @@ class TrainerOTScratchWeaklyShapes(object):
 
                     vae_loss +=  self.bce(img_shifted,x_t)
                     if t==1:
-                        loss_wave = loss_wave_tmp
+                        loss_pde = loss_pde_tmp
                         rho_loss1 = rho_loss1_tmp
                     else:
-                        loss_wave += loss_wave_tmp
+                        loss_pde += loss_pde_tmp
                         rho_loss1 += rho_loss1_tmp
 
                 loss = vae_loss + rho_loss1 + loss_wave
                 # Update statistics tracker
                 self.stat_tracker.update(
-                    accuracy_index=0.0, #torch.mean((torch.argmax(mean_k, dim=1) ==            index).to(torch.float32)).detach(),
-                    accuracy_time=0.0,
                     classification_loss=rho_loss1.item(),
-                    regression_loss=vae_loss.item(), #+ latent_loss.item(),
-                    wave_loss=loss_wave,
+                    regression_loss=vae_loss.item(), 
+                    pde_loss=loss_pde,
                     total_loss=loss.item())
                 loss.backward()
 
@@ -513,40 +501,5 @@ class TrainerOTScratchWeaklyShapes(object):
         print("eq err traverse 2", sum(eq_err_all_traverse2) / len(eq_err_all_traverse2))
         print("eq err traverse 3", sum(eq_err_all_traverse3) / len(eq_err_all_traverse3))
         print("eq err traverse 4", sum(eq_err_all_traverse4) / len(eq_err_all_traverse4))
-        #eq_err_all_pair = []
-        #eq_err_all_traverse_pair = []
-        #for index in range(0, 3):
-        #    for i, (x, y) in enumerate(self.data_loader):
-        #        with torch.no_grad():
-        #            if self.use_cuda:
-        #                x = mnist_color(x.cuda())
-        #        x_seq = x
-        #        with torch.no_grad():
-        #            for t in range(1, self.params.num_support_dipoles // 2+1):
-        #                x_t = mnist_trans(x, index, t)
-        #                x_seq = torch.cat([x_seq, x_t], dim=1)
-        #        index_pred = reconstructor(x_seq)
-        #        eq_loss = 0.0
-        #        eq_loss_traverse = 0.0
-        #        for t in range(0, self.params.num_support_dipoles // 2):
-        #            xx = mnist_trans(x, index, t)
-        #            recon_x, mean, log_var, z = generator(xx)
-        #            #std = torch.exp(log_var / 2.0)
-                    #prob_zt = Normal(mean, std)
-                    #rho_z = prob_zt.log_prob(z)
-        #            for tt in range(t + 1, self.params.num_support_dipoles // 2):
-        #                with torch.no_grad():
-        #                    x_t = mnist_trans(x, index, tt)
-        #                    recon_xt, _, _, _ = generator(x_t)
-        #                _, shift, u_zz = support_sets.index_inference(index_pred, z, t * torch.ones(1, 1, requires_grad=True))
-        #                z += shift
-                        #rho_z = rho_z - (u_zz + 1).abs().log()
-        #                with torch.no_grad():
-        #                    img_shifted = generator.inference(z)
-        #                eq_loss += (recon_xt - x_t).abs().sum() / x_t.size(0)
-        #                eq_loss_traverse += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-        #            eq_err_all_pair.append(eq_loss)
-        #            eq_err_all_traverse_pair.append(eq_loss_traverse)
-        #    print("pair-wise eq err", index, sum(eq_err_all_pair) / len(eq_err_all_pair))
-        #    print("pair-wise eq err traverse", index, sum(eq_err_all_traverse_pair) / len(eq_err_all_traverse_pair))
+       
         return None
