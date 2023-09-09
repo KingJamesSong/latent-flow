@@ -15,16 +15,10 @@ from tensorboard import program
 from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
 from transforms import *
 from torch.distributions.normal import Normal
-from .WavePDE import WavePDE
 from torch.autograd import grad
 
 torch.autograd.set_detect_anomaly(True)
 
-angle_set = [0, 10, 20, 30, 40, 50, 60 , 70 ,80]
-color_set = [180, 200, 220, 240, 260, 280 ,300 , 320, 340]
-scale_set = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5 , 1.6 , 1.7, 1.8]
-mnist_trans = AddRandomTransformationDims(angle_set=angle_set,color_set=color_set,scale_set=scale_set)
-mnist_color = To_Color()
 
 def log_normal_diag(x, mean, log_var, average=False, dim=None):
     log_normal = -0.5 * ( 0.5*log_var + torch.pow( x - mean, 2 ) * torch.pow( torch.exp( log_var), -1) )
@@ -38,7 +32,7 @@ class DataParallelPassthrough(nn.DataParallel):
             return getattr(self.module, name)
 
 
-class TrainerFlowScratch(object):
+class TrainerFalcolIsaacScratch(object):
     def __init__(self, params=None, exp_dir=None, use_cuda=False, multi_gpu=False,data_loader=None):
         if params is None:
             raise ValueError("Cannot build a Trainer instance with empty params: params={}".format(params))
@@ -89,25 +83,14 @@ class TrainerFlowScratch(object):
         # Set up training statistics tracker
         self.stat_tracker = TrainingStatTracker()
 
-    def get_starting_iteration(self, support_sets, reconstructor, generator,prior):
-        """Check if checkpoint file exists (under `self.models_dir`) and set starting iteration at the checkpoint
-        iteration; also load checkpoint weights to `support_sets` and `reconstructor`. Otherwise, set starting
-        iteration to 1 in order to train from scratch.
-
-        Returns:
-            starting_iter (int): starting iteration
-
-        """
+    def get_starting_iteration(self, support_sets, generator,prior):
+    
         starting_iter = 1
         if osp.isfile(self.checkpoint):
             checkpoint_dict = torch.load(self.checkpoint)
             starting_iter = checkpoint_dict['iter']
             support_sets.load_state_dict(checkpoint_dict['support_sets'])
             prior.load_state_dict(checkpoint_dict['prior'])
-            reconstructor.load_state_dict(checkpoint_dict['reconstructor'])
-            #state_dict_new = {}
-            #for k, v in checkpoint_dict['vae'].items():
-            #    state_dict_new[k[len("module.encoder."):]] = v
             generator.load_state_dict(checkpoint_dict['vae'])
         return starting_iter
 
@@ -128,15 +111,7 @@ class TrainerFlowScratch(object):
         return KLD
 
     def log_progress(self, iteration, mean_iter_time, elapsed_time, eta):
-        """Log progress in terms of batch accuracy, classification and regression losses and ETA.
-
-        Args:
-            iteration (int)        : current iteration
-            mean_iter_time (float) : mean iteration time
-            elapsed_time (float)   : elapsed time until current iteration
-            eta (float)            : estimated time of experiment completion
-
-        """
+       
         # Get current training stats (for the previous `self.params.log_freq` steps) and flush them
         stats = self.stat_tracker.get_means()
 
@@ -154,8 +129,6 @@ class TrainerFlowScratch(object):
             self.params.batch_size, iteration, self.params.max_iter), self.params.max_iter, iteration + 1)
         if iteration < self.params.max_iter - 1:
             print()
-        print("      \\__Batch accuracy Index      : {:.03f}".format(stats['accuracy_index']))
-        print("      \\__Batch accuracy Time      : {:.03f}".format(stats['accuracy_time']))
         print("      \\__Classification loss : {:.08f}".format(stats['classification_loss']))
         print("      \\__Regression loss     : {:.08f}".format(stats['regression_loss']))
         print("      \\__Total loss          : {:.08f}".format(stats['total_loss']))
@@ -166,15 +139,8 @@ class TrainerFlowScratch(object):
         print("         ===================================================================")
         update_stdout(10)
 
-    def train(self, generator, support_sets, reconstructor, prior):
-        """Training function.
-
-        Args:
-            generator     :
-            support_sets  :
-            reconstructor :
-
-        """
+    def train(self, generator, support_sets, prior):
+     
         # Save initial `support_sets` model as `support_sets_init.pt`
         torch.save(support_sets.state_dict(), osp.join(self.models_dir, 'support_sets_init.pt'))
 
@@ -183,12 +149,10 @@ class TrainerFlowScratch(object):
         if self.use_cuda:
             generator.cuda().train()
             support_sets.cuda().train()
-            reconstructor.cuda().train()
             prior.cuda().train()
         else:
             generator.train()
             support_sets.train()
-            reconstructor.train()
             prior.train()
 
         # Set support sets optimizer
@@ -197,17 +161,13 @@ class TrainerFlowScratch(object):
         # Set VAE optimizer
         vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.reconstructor_lr)
 
-        # Set shift predictor optimizer
-        reconstructor_optim = torch.optim.Adam(reconstructor.parameters(), lr=self.params.reconstructor_lr)
-
         # Get starting iteration
         starting_iter = self.get_starting_iteration(support_sets, reconstructor,generator,prior)
 
-        # Parallelize `generator` and `reconstructor` into multiple GPUs, if available and `multi_gpu=True`.
+        # Parallelize `generator` into multiple GPUs, if available and `multi_gpu=True`.
         if self.multi_gpu:
             print("#. Parallelize G, R over {} GPUs...".format(torch.cuda.device_count()))
             generator = DataParallelPassthrough(generator)
-            reconstructor = DataParallelPassthrough(reconstructor)
             cudnn.benchmark = True
 
         # Check starting iteration
@@ -242,11 +202,10 @@ class TrainerFlowScratch(object):
                 if self.use_cuda:
                     data = [t.cuda() for t in data]
                 x = data[0]
-                #print(x.mean())
+             
                 iter_t0 = time.time()
                 half_range = self.params.num_support_dipoles // 2
-                #If you want to have x_0 start with different angle/color/scale
-                #x = mnist_trans(x, torch.randint(0, self.params.num_support_sets,(1,1)), torch.randint(0, half_range//2,(1,1)) )
+                
                 recon_x, mean, log_var, z = generator(x)
                 #prior probability
                 std = torch.exp(log_var / 2.0)
@@ -259,7 +218,7 @@ class TrainerFlowScratch(object):
                 for t in range(1, half_range):
                     x_t = data[t]
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
-                    energy, loss_wave_tmp, uz, uzz = support_sets(index, z, time_stamp)
+                    energy, loss_pde_tmp, uz, uzz = support_sets(index, z, time_stamp)
 
                     _, _, _, uzz_prior = prior(index, z, time_stamp, rho)
 
@@ -274,25 +233,22 @@ class TrainerFlowScratch(object):
                     vae_loss +=  self.bce(img_shifted,x_t)
 
                     if t==1:
-                        loss_wave = loss_wave_tmp
+                        loss_pde  = loss_pde_tmp
                         rho_loss1 = rho_loss1_tmp
                     else:
-                        loss_wave += loss_wave_tmp
+                        loss_pde  += loss_pde_tmp
                         rho_loss1 += rho_loss1_tmp
 
                 loss = vae_loss + rho_loss1 + loss_wave
                 # Update statistics tracker
                 self.stat_tracker.update(
-                    accuracy_index=0.0, #torch.mean((torch.argmax(mean_k, dim=1) ==            index).to(torch.float32)).detach(),
-                    accuracy_time=0.0,
                     classification_loss=rho_loss1.item(),
                     regression_loss=vae_loss.item(), #+ latent_loss.item(),
-                    wave_loss=loss_wave.item(),
+                    pde_loss=loss_pde.item(),
                     total_loss=loss.item())
                 loss.backward()
 
                 support_sets_optim.step()
-                reconstructor_optim.step()
                 vae_optimizer.step()
 
 
@@ -321,7 +277,7 @@ class TrainerFlowScratch(object):
                 if iteration % self.params.log_freq == 0:
                     self.log_progress(iteration, mean_iter_time, elapsed_time, eta)
 
-                # Save checkpoint model file and support_sets / reconstructor model state dicts after current iteration
+                # Save checkpoint model file and support_sets model state dicts after current iteration
                 if iteration % self.params.ckp_freq == 0:
                     # Build checkpoint dict
                     checkpoint_dict = {
@@ -329,7 +285,6 @@ class TrainerFlowScratch(object):
                         'support_sets': support_sets.state_dict(),
                         'prior': prior.state_dict(),
                         'vae': generator.state_dict(),
-                        'reconstructor': reconstructor.module.state_dict() if self.multi_gpu else reconstructor.state_dict()
                     }
                     torch.save(checkpoint_dict, self.checkpoint)
         # === End of training loop ===
@@ -337,14 +292,6 @@ class TrainerFlowScratch(object):
         # Get experiment's total elapsed time
         elapsed_time = time.time() - t0
 
-        # Save final support sets model
-        support_sets_model_filename = osp.join(self.models_dir, 'support_sets.pt')
-        torch.save(support_sets.state_dict(), support_sets_model_filename)
-
-        # Save final shift predictor model
-        reconstructor_model_filename = osp.join(self.models_dir, 'reconstructor.pt')
-        torch.save(reconstructor.module.state_dict() if self.multi_gpu else reconstructor.state_dict(),
-                   reconstructor_model_filename)
 
         for _ in range(10):
             print()
@@ -357,12 +304,11 @@ class TrainerFlowScratch(object):
         except IOError as e:
             print("  \\__Already exists -- {}".format(e))
 
-    def eval(self, generator, support_sets, reconstructor, prior):
+    def eval(self, generator, support_sets, prior):
 
         neg_likelihood = []
-        # starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator,prior)
+        starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator,prior)
         support_sets.eval()
-        reconstructor.eval()
         generator.eval()
         prior.eval()
         prior_z0 = Normal(0.0, 1.0)
