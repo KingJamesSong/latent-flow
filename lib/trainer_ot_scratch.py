@@ -270,7 +270,6 @@ class TrainerOTScratch(object):
                 loss.backward()
 
                 support_sets_optim.step()
-                reconstructor_optim.step()
                 vae_optimizer.step()
 
 
