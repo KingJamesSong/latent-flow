@@ -15,8 +15,6 @@ from tensorboard import program
 from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
 from transforms import *
 from torch.distributions.normal import Normal
-from .WaFlow import TruncNormal
-from .WavePDE import WavePDE
 from torch.autograd import grad
 
 torch.autograd.set_detect_anomaly(True)
@@ -92,22 +90,14 @@ class TrainerOTScratch(object):
         # Set up training statistics tracker
         self.stat_tracker = TrainingStatTracker()
 
-    def get_starting_iteration(self, support_sets, reconstructor, generator,prior):
-        """Check if checkpoint file exists (under `self.models_dir`) and set starting iteration at the checkpoint
-        iteration; also load checkpoint weights to `support_sets` and `reconstructor`. Otherwise, set starting
-        iteration to 1 in order to train from scratch.
-
-        Returns:
-            starting_iter (int): starting iteration
-
-        """
+    def get_starting_iteration(self, support_sets, generator, prior):
+       
         starting_iter = 1
         if osp.isfile(self.checkpoint):
             checkpoint_dict = torch.load(self.checkpoint)
             starting_iter = checkpoint_dict['iter']
             support_sets.load_state_dict(checkpoint_dict['support_sets'])
             prior.load_state_dict(checkpoint_dict['prior'])
-            reconstructor.load_state_dict(checkpoint_dict['reconstructor'])
             #state_dict_new = {}
             #for k, v in checkpoint_dict['vae'].items():
             #    state_dict_new[k[len("module.encoder."):]] = v
@@ -157,8 +147,6 @@ class TrainerOTScratch(object):
             self.params.batch_size, iteration, self.params.max_iter), self.params.max_iter, iteration + 1)
         if iteration < self.params.max_iter - 1:
             print()
-        print("      \\__Batch accuracy Index      : {:.03f}".format(stats['accuracy_index']))
-        print("      \\__Batch accuracy Time      : {:.03f}".format(stats['accuracy_time']))
         print("      \\__Classification loss : {:.08f}".format(stats['classification_loss']))
         print("      \\__Regression loss     : {:.08f}".format(stats['regression_loss']))
         print("      \\__Total loss          : {:.08f}".format(stats['total_loss']))
@@ -169,15 +157,8 @@ class TrainerOTScratch(object):
         print("         ===================================================================")
         update_stdout(10)
 
-    def train(self, generator, support_sets, reconstructor, prior):
-        """Training function.
-
-        Args:
-            generator     :
-            support_sets  :
-            reconstructor :
-
-        """
+    def train(self, generator, support_sets, prior):
+      
         # Save initial `support_sets` model as `support_sets_init.pt`
         torch.save(support_sets.state_dict(), osp.join(self.models_dir, 'support_sets_init.pt'))
 
@@ -186,12 +167,10 @@ class TrainerOTScratch(object):
         if self.use_cuda:
             generator.cuda().train()
             support_sets.cuda().train()
-            reconstructor.cuda().train()
             prior.cuda().train()
         else:
             generator.train()
             support_sets.train()
-            reconstructor.train()
             prior.train()
 
         # Set support sets optimizer
@@ -200,9 +179,6 @@ class TrainerOTScratch(object):
         # Set VAE optimizer
         vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.reconstructor_lr)
 
-        # Set shift predictor optimizer
-        reconstructor_optim = torch.optim.Adam(reconstructor.parameters(), lr=self.params.reconstructor_lr)
-
         # Get starting iteration
         starting_iter = self.get_starting_iteration(support_sets, reconstructor,generator,prior)
 
@@ -210,7 +186,6 @@ class TrainerOTScratch(object):
         if self.multi_gpu:
             print("#. Parallelize G, R over {} GPUs...".format(torch.cuda.device_count()))
             generator = DataParallelPassthrough(generator)
-            reconstructor = DataParallelPassthrough(reconstructor)
             cudnn.benchmark = True
 
         # Check starting iteration
@@ -227,8 +202,6 @@ class TrainerOTScratch(object):
 
         # Get experiment's start time
         t0 = time.time()
-        #self.params.max_iter = self.params.max_iter - starting_iter + 1
-        #starting_iter = 0
         # Start training
         iteration = starting_iter
         while iteration<=self.params.max_iter:
@@ -253,10 +226,10 @@ class TrainerOTScratch(object):
                 recon_x, mean, log_var, z = generator(x)
                 #prior probability
                 std = torch.exp(log_var / 2.0)
-                prob_z = TruncNormal(0.0, 1.0)
+                prob_z = Normal(0.0, 1.0)
                 rho = prob_z.log_prob(z)
                 #posterior probability
-                prob_zt = TruncNormal(mean, std)
+                prob_zt = Normal(mean, std)
                 rho_t = prob_zt.log_prob(z)
                 vae_loss = self.loss_fn(recon_x, x, mean, log_var)
                 for t in range(1, half_range+1):
@@ -267,7 +240,7 @@ class TrainerOTScratch(object):
 
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
 
-                    energy, loss_wave_tmp, uz, uzz = support_sets(index, z, time_stamp, zt_mu, zt_std)
+                    energy, loss_pde_tmp, uz, uzz = support_sets(index, z, time_stamp, zt_mu, zt_std)
                     _, _, _, uzz_prior = prior(index, z, time_stamp, rho)
 
                     rho_t = rho_t - (uzz+1).abs().log()
@@ -281,20 +254,18 @@ class TrainerOTScratch(object):
                     vae_loss +=  self.bce(img_shifted,x_t)
 
                     if t==1:
-                        loss_wave = loss_wave_tmp
+                        loss_pde = loss_pde_tmp
                         rho_loss1 = rho_loss1_tmp
                     else:
-                        loss_wave += loss_wave_tmp
+                        loss_pde += loss_pde_tmp
                         rho_loss1 += rho_loss1_tmp
 
                 loss = vae_loss + rho_loss1 + loss_wave
                 # Update statistics tracker
                 self.stat_tracker.update(
-                    accuracy_index=0.0, #torch.mean((torch.argmax(mean_k, dim=1) ==            index).to(torch.float32)).detach(),
-                    accuracy_time=0.0,
                     classification_loss=rho_loss1.item(),
-                    regression_loss=vae_loss.item(), #+ latent_loss.item(),
-                    wave_loss=loss_wave,
+                    regression_loss=vae_loss.item()
+                    pde_loss=loss_wave,
                     total_loss=loss.item())
                 loss.backward()
 
@@ -328,30 +299,20 @@ class TrainerOTScratch(object):
                 if iteration % self.params.log_freq == 0:
                     self.log_progress(iteration, mean_iter_time, elapsed_time, eta)
 
-                # Save checkpoint model file and support_sets / reconstructor model state dicts after current iteration
+                # Save checkpoint model file and support_sets model state dicts after current iteration
                 if iteration % self.params.ckp_freq == 0:
                     # Build checkpoint dict
                     checkpoint_dict = {
                         'iter': iteration,
                         'support_sets': support_sets.state_dict(),
                         'prior': prior.state_dict(),
-                        'vae': generator.state_dict(),
-                        'reconstructor': reconstructor.module.state_dict() if self.multi_gpu else reconstructor.state_dict()
+                        'vae': generator.state_dict()
                     }
                     torch.save(checkpoint_dict, self.checkpoint)
         # === End of training loop ===
 
         # Get experiment's total elapsed time
         elapsed_time = time.time() - t0
-
-        # Save final support sets model
-        support_sets_model_filename = osp.join(self.models_dir, 'support_sets.pt')
-        torch.save(support_sets.state_dict(), support_sets_model_filename)
-
-        # Save final shift predictor model
-        reconstructor_model_filename = osp.join(self.models_dir, 'reconstructor.pt')
-        torch.save(reconstructor.module.state_dict() if self.multi_gpu else reconstructor.state_dict(),
-                   reconstructor_model_filename)
 
         for _ in range(10):
             print()
@@ -364,12 +325,11 @@ class TrainerOTScratch(object):
         except IOError as e:
             print("  \\__Already exists -- {}".format(e))
 
-    def eval(self, generator, support_sets, reconstructor,prior):
+    def eval(self, generator, support_sets,prior):
 
         neg_likelihood = []
-        starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator,prior)
+        starting_iter = self.get_starting_iteration(support_sets, generator,prior)
         support_sets.eval()
-        reconstructor.eval()
         generator.eval()
         prior.eval()
         prior_z0 = Normal(0.0, 1.0)
