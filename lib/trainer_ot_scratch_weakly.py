@@ -15,7 +15,6 @@ from tensorboard import program
 from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
 from transforms import *
 from torch.distributions.normal import Normal
-from .WavePDE import WavePDE
 from torch.autograd import grad
 
 angle_set = [0, 10, 20, 30, 40, 50, 60 , 70 ,80]
@@ -99,14 +98,7 @@ class TrainerOTScratchWeakly(object):
         self.stat_tracker = TrainingStatTracker()
 
     def get_starting_iteration(self, support_sets, reconstructor, generator,prior):
-        """Check if checkpoint file exists (under `self.models_dir`) and set starting iteration at the checkpoint
-        iteration; also load checkpoint weights to `support_sets` and `reconstructor`. Otherwise, set starting
-        iteration to 1 in order to train from scratch.
-
-        Returns:
-            starting_iter (int): starting iteration
-
-        """
+      
         starting_iter = 1
         if osp.isfile(self.checkpoint):
             checkpoint_dict = torch.load(self.checkpoint)
@@ -114,9 +106,6 @@ class TrainerOTScratchWeakly(object):
             support_sets.load_state_dict(checkpoint_dict['support_sets'])
             prior.load_state_dict(checkpoint_dict['prior'])
             reconstructor.load_state_dict(checkpoint_dict['reconstructor'])
-            #state_dict_new = {}
-            #for k, v in checkpoint_dict['vae'].items():
-            #    state_dict_new[k[len("module.encoder."):]] = v
             generator.load_state_dict(checkpoint_dict['vae'])
         return starting_iter
 
@@ -163,8 +152,6 @@ class TrainerOTScratchWeakly(object):
             self.params.batch_size, iteration, self.params.max_iter), self.params.max_iter, iteration + 1)
         if iteration < self.params.max_iter - 1:
             print()
-        print("      \\__Batch accuracy Index      : {:.03f}".format(stats['accuracy_index']))
-        print("      \\__Batch accuracy Time      : {:.03f}".format(stats['accuracy_time']))
         print("      \\__Classification loss : {:.08f}".format(stats['classification_loss']))
         print("      \\__Regression loss     : {:.08f}".format(stats['regression_loss']))
         print("      \\__Total loss          : {:.08f}".format(stats['total_loss']))
@@ -281,7 +268,7 @@ class TrainerOTScratchWeakly(object):
                     #z_t = generator.encoder.reparameterize(zt_mu, zt_logvar)
 
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
-                    energy,loss_wave_tmp, uz, uzz = support_sets.index_forward(index_pred, z, time_stamp)
+                    energy,loss_pde_tmp, uz, uzz = support_sets.index_forward(index_pred, z, time_stamp)
                     _, _, _, uzz_prior  = prior.index_forward(index_pred, z, time_stamp, rho)
 
 
@@ -294,21 +281,19 @@ class TrainerOTScratchWeakly(object):
 
                     vae_loss +=  self.bce(img_shifted,x_t)
                     if t==1:
-                        loss_wave = loss_wave_tmp
+                        loss_pde = loss_pde_tmp
                         rho_loss1 = rho_loss1_tmp
 
                     else:
-                        loss_wave += loss_wave_tmp
+                        loss_pde += loss_pde_tmp
                         rho_loss1 += rho_loss1_tmp
 
                 loss = vae_loss + rho_loss1 + loss_wave
                 # Update statistics tracker
                 self.stat_tracker.update(
-                    accuracy_index=0.0, #torch.mean((torch.argmax(mean_k, dim=1) ==            index).to(torch.float32)).detach(),
-                    accuracy_time=0.0,
                     classification_loss=rho_loss1.item(),
                     regression_loss=vae_loss.item(), #+ latent_loss.item(),
-                    wave_loss=loss_wave,
+                    wave_pde=loss_wave,
                     total_loss=loss.item())
                 loss.backward()
 
