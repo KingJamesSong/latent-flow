@@ -7,9 +7,8 @@ from PIL import Image, ImageDraw
 import json
 from torchvision.transforms import ToPILImage
 from lib import *
-from models.gan_load import build_biggan, build_proggan, build_stylegan2, build_sngan
 import numpy as np
-from models.vae import VAE, ConvVAE, ConvVAE2
+from vae import ConvVAE, ConvVAE2
 
 def text_save(filename, data):
     file = open(filename,'a')
@@ -48,35 +47,6 @@ def tensor2image(tensor, img_size=None, adaptive=False):
             return ToPILImage()((255 * tensor.cpu().detach()).to(torch.uint8)).resize((img_size, img_size))
         else:
             return ToPILImage()((255 * tensor.cpu().detach()).to(torch.uint8))
-
-
-def build_gan(gan_type, target_classes, stylegan2_resolution, shift_in_w_space, use_cuda, multi_gpu):
-    # -- BigGAN
-    if gan_type == 'BigGAN':
-        G = build_biggan(pretrained_gan_weights=GAN_WEIGHTS[gan_type]['weights'][GAN_RESOLUTIONS[gan_type]],
-                         target_classes=target_classes)
-    # -- ProgGAN
-    elif gan_type == 'ProgGAN':
-        G = build_proggan(pretrained_gan_weights=GAN_WEIGHTS[gan_type]['weights'][GAN_RESOLUTIONS[gan_type]])
-    # -- StyleGAN2
-    elif gan_type == 'StyleGAN2':
-        G = build_stylegan2(pretrained_gan_weights=GAN_WEIGHTS[gan_type]['weights'][stylegan2_resolution],
-                            resolution=stylegan2_resolution,
-                            shift_in_w_space=shift_in_w_space)
-    # -- Spectrally Normalised GAN (SNGAN)
-    else:
-        G = build_sngan(pretrained_gan_weights=GAN_WEIGHTS[gan_type]['weights'][GAN_RESOLUTIONS[gan_type]],
-                        gan_type=gan_type)
-
-    # Upload GAN generator model to GPU
-    if use_cuda:
-        G = G.cuda()
-
-    # Parallelize GAN generator model into multiple GPUs if possible
-    if multi_gpu:
-        G = DataParallelPassthrough(G)
-
-    return G
 
 
 def one_hot(dims, value, idx):
@@ -126,40 +96,8 @@ def get_concat_h(img_file_orig,
 
 
 def main():
-    """WarpedGANSpace -- Latent space traversal script.
-
-    A script for traversing the latent space of a pre-trained GAN generator through paths defined by the warpings of
-    a set of pre-trained support vectors. Latent codes are drawn from a pre-defined collection via the `--pool`
-    argument. The generated images are stored under `results/` directory.
-
-    Options:
-        ================================================================================================================
-        -v, --verbose : set verbose mode on
-        ================================================================================================================
-        --exp         : set experiment's model dir, as created by `train.py`, i.e., it should contain a sub-directory
-                        `models/` with two files, namely `reconstructor.pt` and `support_sets.pt`, which
-                        contain the weights for the reconstructor and the support sets, respectively, and an `args.json`
-                        file that contains the arguments the model has been trained with.
-        --pool        : directory of pre-defined pool of latent codes (created by `sample_gan.py`)
-        ================================================================================================================
-        --shift-steps : set number of shifts to be applied to each latent code at each direction (positive/negative).
-                        That is, the total number of shifts applied to each latent code will be equal to
-                        2 * args.shift_steps.
-        --eps         : set shift step magnitude for generating G(z'), where z' = z +/- eps * direction.
-        --shift-leap  : set path shift leap (after how many steps to generate images)
-        --batch-size  : set generator batch size (if not set, use the total number of images per path)
-        --img-size    : set size of saved generated images (if not set, use the output size of the respective GAN
-                        generator)
-        --img-quality : JPEG image quality (max 95)
-        --gif         : generate collated GIF images for all paths and all latent codes
-        --gif-size    : set GIF image size
-        --gif-fps     : set number of frames per second for the generated GIF images
-        ================================================================================================================
-        --cuda        : use CUDA (default)
-        --no-cuda     : do not use CUDA
-        ================================================================================================================
-    """
-    parser = argparse.ArgumentParser(description="WarpedGANSpace latent space traversal script")
+    
+    parser = argparse.ArgumentParser(description="Laten flow evolution script")
     parser.add_argument('-v', '--verbose', action='store_true', help="set verbose mode on")
     # ================================================================================================================ #
     parser.add_argument('--exp', type=str, required=True, help="set experiment's model dir (created by `train.py`)")
@@ -167,7 +105,7 @@ def main():
                                                                 "(created by `sample_gan.py`)")
     parser.add_argument('--shift-steps', type=int, default=16, help="set number of shifts per positive/negative path "
                                                                     "direction")
-    parser.add_argument('--eps', type=float, default=0.2, help="set shift step magnitude")
+    parser.add_argument('--eps', type=float, default=1, help="set shift step magnitude")
     parser.add_argument('--shift-leap', type=int, default=1,
                         help="set path shift leap (after how many steps to generate images)")
     parser.add_argument('--batch-size', type=int, help="set generator batch size (if not set, use the total number of "
@@ -181,7 +119,6 @@ def main():
     # ================================================================================================================ #
     parser.add_argument('--cuda', dest='cuda', action='store_true', help="use CUDA during training")
     parser.add_argument('--no-cuda', dest='cuda', action='store_false', help="do NOT use CUDA during training")
-    parser.add_argument("--dsprites", type=bool, default=False)
     parser.add_argument("--shapes3d", type=bool, default=False)
     parser.add_argument("--vae_scratch", type=bool, default=False)
     parser.set_defaults(cuda=True)
@@ -209,7 +146,7 @@ def main():
     # ---- Get all files of models directory
     models_dir_files = [f for f in os.listdir(models_dir) if osp.isfile(osp.join(models_dir, f))]
 
-    # ---- Check for support sets file (final or checkpoint)
+    # ---- Check for PDE support sets file (final or checkpoint)
     support_sets_model = osp.join(models_dir, 'checkpoint.pt')
     if not osp.isfile(support_sets_model):
         support_sets_checkpoint_files = []
@@ -220,25 +157,9 @@ def main():
         print(models_dir,support_sets_checkpoint_files)
         support_sets_model = osp.join(models_dir, support_sets_checkpoint_files[-1])
 
-    # ---- Check for reconstructor file (final or checkpoint)
-    # reconstructor_model = osp.join(models_dir, 'reconstructor.pt')
-    # if not osp.isfile(reconstructor_model):
-    #     reconstructor_checkpoint_files = []
-    #     for f in models_dir_files:
-    #         if 'reconstructor-' in f:
-    #             reconstructor_checkpoint_files.append(f)
-    #     reconstructor_checkpoint_files.sort()
-    #     reconstructor_model = osp.join(models_dir, reconstructor_checkpoint_files[-1])
-
     # Check given pool directory
     pool = osp.join('experiments', 'latent_codes')
-    if gan_type == 'BigGAN':
-        biggan_target_classes = ''
-        for c in args_json.__dict__["biggan_target_classes"]:
-            biggan_target_classes += '-{}'.format(c)
-        pool = osp.join(pool, gan_type + biggan_target_classes, args.pool)
-    else:
-        pool = osp.join(pool, gan_type, args.pool)
+    pool = osp.join(pool, gan_type, args.pool)
 
     if not osp.isdir(pool):
         raise NotADirectoryError("Invalid pool directory: {} -- Please run sample_gan.py to create it.".format(pool))
@@ -259,56 +180,29 @@ def main():
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
-    # Build GAN generator model and load with pre-trained weights
-    print(args.dsprites)
-    if args.dsprites == True:
-        G = ConvVAE(num_channel=1,latent_size=15*15+1,img_size=64)
-        G.load_state_dict(torch.load("vae_dsprites_conv.pt", map_location='cpu'))
-        print("Load DSPRITES VAE")
-    elif args.shapes3d == True:
+    # Build VAE load with pre-trained weights
+    if args.shapes3d == True:
         G = ConvVAE(num_channel=3, latent_size=15 * 15 + 1, img_size=64)
-        G.load_state_dict(torch.load("vae_shapes3d.pt", map_location='cpu'))
     else:
         G = ConvVAE2(num_channel=3, latent_size=18 * 18, img_size=128)
-        #G.load_state_dict(torch.load("vae_mnist_conv.pt", map_location='cpu'))
-        print("Load MNIST VAE")
+        
 
-    # Build support sets model S
+    # Build PDE flows S
     if args.verbose:
-        print("#. Build support sets model S...")
+        print("#. Build PDE flows S...")
 
-    if args.shapes3d == True:
-        S = HJPDE(num_support_sets=args_json.__dict__["num_support_sets"],
-                    num_support_dipoles=args_json.__dict__["num_support_dipoles"],
-                    support_vectors_dim=G.latent_size,
-                    learn_alphas=args_json.__dict__["learn_alphas"],
-                    learn_gammas=args_json.__dict__["learn_gammas"],
-                    gamma=1.0 / G.latent_size if args_json.__dict__["gamma"] is None else args_json.__dict__["gamma"]
-                    #madelung_flow=args_json.__dict__["madelung"]
-                  )
-    else:
-        S = HJPDE(num_support_sets=args_json.__dict__["num_support_sets"],
-                    num_support_dipoles=args_json.__dict__["num_support_dipoles"],
-                    support_vectors_dim=G.latent_size,
-                    learn_alphas=args_json.__dict__["learn_alphas"],
-                    learn_gammas=args_json.__dict__["learn_gammas"],
-                    gamma=1.0 / G.latent_size if args_json.__dict__["gamma"] is None else args_json.__dict__["gamma"]
-                    #madelung_flow=args_json.__dict__["madelung"]
-                  )
-    #for i in range(S.num_support_sets):
-    #    S.MLP_SET[i].activation4 = nn.Identity()
-    # Load pre-trained weights and set to evaluation mode
+    
+    S = HJPDE(num_support_sets=args_json.__dict__["num_support_sets"],
+                num_support_dipoles=args_json.__dict__["num_predictor"],
+                support_vectors_dim=G.latent_size)
+
     if args.verbose:
         print("  \\__Pre-trained weights: {}".format(support_sets_model))
     S.load_state_dict(torch.load(support_sets_model, map_location=lambda storage, loc: storage)['support_sets'])
     if args.vae_scratch:
-        if args.dsprites == True:
-            #G = ConvVAE(num_channel=1, latent_size=256)
-            G = ConvVAE(num_channel=1, latent_size=15 * 15 + 1, img_size=64)
-        elif args.shapes3d == True:
+        if args.shapes3d == True:
             G = ConvVAE(num_channel=3, latent_size=15 * 15 + 1, img_size=64)
         else:
-            #G = VAE(encoder_layer_sizes=[784*3, 256], latent_size=16, decoder_layer_sizes=[256, 784*3])
             G = ConvVAE2(num_channel=3, latent_size=18 * 18, img_size=128)
         G.load_state_dict(torch.load(support_sets_model, map_location=lambda storage, loc: storage)['vae'])
     if args.verbose:
@@ -457,15 +351,10 @@ def main():
                     energy_wave = np.array(energy.view(-1).cpu().detach().numpy())
                     shift_wave = np.array(z.view(-1).cpu().detach().numpy())
                     shift_wave = np.append(shift_wave, np.array(shift.view(-1).cpu().detach().numpy()))
-                    #rho_wave = np.array(rho.view(-1).cpu().detach().numpy())
-                    #v_wave = np.array(v.view(-1).cpu().detach().numpy())
                 else:
                     energy_wave = np.append(energy_wave, np.array(energy.view(-1).cpu().detach().numpy()))
                     shift_wave = np.append(shift_wave, np.array(shift.view(-1).cpu().detach().numpy()))
-                    #rho_wave = np.append(rho_wave, np.array(rho.view(-1).cpu().detach().numpy()))
-                    #v_wave = np.append(v_wave, np.array(v.view(-1).cpu().detach().numpy()))
-
-                print(energy)
+              
                 # Store latent codes and shifts
                 if cnt == args.shift_leap:
                     current_path_latent_shifts.append(args.eps*shift)
@@ -479,18 +368,6 @@ def main():
                     z = z + args.eps * shift
             text_save(osp.join(transformed_images_root_dir, 'shift_{:03d}.txt'.format(dim)), shift_wave)
             text_save(osp.join(transformed_images_root_dir, 'wave_{:03d}.txt'.format(dim)), energy_wave)
-            #text_save(osp.join(transformed_images_root_dir, 'rho_{:03d}.txt'.format(dim)), rho_wave)
-            #text_save(osp.join(transformed_images_root_dir, 'v_{:03d}.txt'.format(dim)), v_wave)
-            # Generate transformed images
-            # Split latent codes and shifts in batches
-            current_path_latent_codes = torch.cat(current_path_latent_codes)
-            current_path_latent_codes_batches = torch.split(current_path_latent_codes, args.batch_size)
-            #for elem in current_path_latent_shifts:
-            #    print(elem.size())
-            #print(len(current_path_latent_codes),len(current_path_latent_shifts))
-            current_path_latent_shifts = torch.cat(current_path_latent_shifts)
-            current_path_latent_shifts_batches = torch.split(current_path_latent_shifts, args.batch_size)
-            #print(len(current_path_latent_codes_batches), len(current_path_latent_shifts_batches))
             if len(current_path_latent_codes_batches) != len(current_path_latent_shifts_batches):
                 raise AssertionError()
             else:
@@ -501,12 +378,6 @@ def main():
                 with torch.no_grad():
                     print(current_path_latent_shifts_batches[t]+current_path_latent_shifts_batches[t])
                     img = G.inference(current_path_latent_codes_batches[t]+current_path_latent_shifts_batches[t])
-                    #if args.vae_scratch == True and args.dsprites == False:
-                    #    H = img.size(1)
-                    #    img = img.view(img.size(0), 3, int(np.sqrt(H/3)), int(np.sqrt(H/3)))
-                    #elif args.dsprites == False:
-                    #    H = img.size(1)
-                    #    img = img.view(img.size(0), int(np.sqrt(H)), int(np.sqrt(H)))
                     transformed_img.append(img)
             transformed_img = torch.cat(transformed_img)
 
