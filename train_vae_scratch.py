@@ -77,13 +77,10 @@ def main():
 
     if args.shapes3d == True:
         G = ConvVAE(num_channel=3,latent_size=15*15+1,img_size=64)
-        #G = ConvVAE(num_channel=1,latent_size=256)
         G.load_state_dict(torch.load("vae_shapes3d.pt", map_location='cpu'))
         print("Initialize Shapes3D VAE")
     elif:
-        G = ConvVAE(num_channel=3, latent_size=args.latent_size, img_size=28)
-        #G = VAE(encoder_layer_sizes=[784*3,256],latent_size=16,decoder_layer_sizes=[256,784*3])
-        #G.load_state_dict(torch.load("vae_mnist.pt", map_location='cpu'))
+        G = ConvVAE(num_channel=3, latent_size=18*18, img_size=28)
         print("Intialize MNIST VAE")
 
     # Build PDEs
@@ -96,7 +93,7 @@ def main():
               num_timesteps=args.num_timesteps,
               support_vectors_dim=G.latent_size)
 
-    S_Prior = WavePDE(num_support_sets=args.num_support_sets,
+    S_Prior = DiffPDE(num_support_sets=args.num_support_sets,
               num_timesteps=args.num_timesteps,
               support_vectors_dim=G.latent_size)
 
