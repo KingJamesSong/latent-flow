@@ -16,61 +16,35 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 def main():
      """
         ===[ PDEs ]=========================================================================================
-        -K, --num-support-sets     : set number PDEs
+        -K, --num-support-sets     : set number of PDEs
         -D, --num-timesteps        : set number of timesteps
         --support-set-lr           : set learning rate for learning PDEs
+        
         ===[ Training ]=================================================================================================
         --max-iter                 : set maximum number of training iterations
         --batch-size               : set training batch size
         --log-freq                 : set number iterations per log
         --ckp-freq                 : set number iterations per checkpoint model saving
         --tensorboard              : use TensorBoard
+        
         ===[ CUDA ]=====================================================================================================
         --cuda                     : use CUDA during training (default)
         --no-cuda                  : do NOT use CUDA during training
         ================================================================================================================
     """
-    parser = argparse.ArgumentParser(description="WarpedGANSpace training script")
+    parser = argparse.ArgumentParser(description="Latent Flow training script")
 
-    # === Pre-trained GAN Generator (G) ============================================================================== #
-    parser.add_argument('--gan-type', type=str, help='set GAN generator model type')
-    parser.add_argument('--z-truncation', type=float, help="set latent code sampling truncation parameter")
-    parser.add_argument('--biggan-target-classes', nargs='+', type=int, help="list of classes for conditional BigGAN")
-    parser.add_argument('--stylegan2-resolution', type=int, default=1024, choices=(256, 1024),
-                        help="StyleGAN2 image resolution")
-    parser.add_argument('--shift-in-w-space', action='store_true', help="search latent paths in StyleGAN2's W-space")
-
-    # === Support Sets (S) ======================================================================== #
-    parser.add_argument('-K', '--num-support-sets', type=int, help="set number of support sets (warping functions)")
-    parser.add_argument('-D', '--num-support-dipoles', type=int, help="set number of support dipoles per support set")
-    parser.add_argument('--learn-alphas', action='store_true', help='learn RBF alpha params')
-    parser.add_argument('--learn-gammas', action='store_true', help='learn RBF gamma params')
-    parser.add_argument('-g', '--gamma', type=float, help="set RBF gamma param; when --learn-gammas is set, this will "
-                                                          "be the initial value of gammas for all RBFs")
-    parser.add_argument('--support-set-lr', type=float, default=1e-4, help="set learning rate")
-
-    # === Reconstructor (R) ========================================================================================== #
-    parser.add_argument('--reconstructor-type', type=str, default='ResNet',
-                        help='set reconstructor network type')
-    parser.add_argument('--min-shift-magnitude', type=float, default=0.25, help="set minimum shift magnitude")
-    parser.add_argument('--max-shift-magnitude', type=float, default=0.45, help="set shifts magnitude scale")
-    parser.add_argument('--reconstructor-lr', type=float, default=1e-4,
-                        help="set learning rate for reconstructor R optimization")
-
+    # === PDEs ======================================================================== #
+    parser.add_argument('-K', '--num-support-sets', type=int, help="set number of PDEs")
+    parser.add_argument('-D', '--num-timesteps', type=int, help="set number of timesteps")
+    parser.add_argument('--support-set-lr', type=float, default=1e-4, help="set learning rate for learning PDEs")
     # === Training =================================================================================================== #
     parser.add_argument('--max-iter', type=int, default=100000, help="set maximum number of training iterations")
     parser.add_argument('--batch-size', type=int, default=128, help="set batch size")
-    parser.add_argument('--lambda-cls', type=float, default=1.00, help="classification loss weight")
-    parser.add_argument('--lambda-reg', type=float, default=1.00, help="regression loss weight")
-    parser.add_argument('--lambda-pde', type=float, default=1.00, help="regression loss weight")
     parser.add_argument('--log-freq', default=10, type=int, help='set number iterations per log')
     parser.add_argument('--ckp-freq', default=1000, type=int, help='set number iterations per checkpoint model saving')
     parser.add_argument('--tensorboard', action='store_true', help="use tensorboard")
-    parser.add_argument("--dsprites", type=bool, default=False)
     parser.add_argument("--shapes3d", type=bool, default=False)
-    parser.add_argument("--madelung", type=bool, default=False)
-    parser.add_argument('--latent-size', type=int, default=4)
-    parser.add_argument('--particle-size', type=int, default=2)
     # === CUDA ======================================================================================================= #
     parser.add_argument('--cuda', dest='cuda', action='store_true', help="use CUDA during training")
     parser.add_argument('--no-cuda', dest='cuda', action='store_false', help="do NOT use CUDA during training")
@@ -100,125 +74,41 @@ def main():
         torch.set_default_tensor_type('torch.FloatTensor')
 
 
-    # === BigGAN ===
-    if args.dsprites == True:
-        G = ConvVAE(num_channel=1,latent_size=4,img_size=64)
-        #G = ConvVAE(num_channel=1,latent_size=256)
-        #G.load_state_dict(torch.load("vae_dsprites.pt", map_location='cpu'))
-        print("Intialize DSPRITES VAE")
-    elif args.shapes3d == True:
+
+    if args.shapes3d == True:
         G = ConvVAE(num_channel=3,latent_size=15*15+1,img_size=64)
         #G = ConvVAE(num_channel=1,latent_size=256)
         G.load_state_dict(torch.load("vae_shapes3d.pt", map_location='cpu'))
-        print("Intialize Shapes3D VAE")
-    else:
+        print("Initialize Shapes3D VAE")
+    elif:
         G = ConvVAE(num_channel=3, latent_size=args.latent_size, img_size=28)
         #G = VAE(encoder_layer_sizes=[784*3,256],latent_size=16,decoder_layer_sizes=[256,784*3])
         #G.load_state_dict(torch.load("vae_mnist.pt", map_location='cpu'))
         print("Intialize MNIST VAE")
 
-    # Build Support Sets model S
+    # Build PDEs
     print("#. Build Support Sets S...")
     print("  \\__Number of Support Sets    : {}".format(args.num_support_sets))
-    print("  \\__Number of Support Dipoles : {}".format(args.num_support_dipoles))
-    print("  \\__Support Vectors dim       : {}".format(G.latent_size))
-    print("  \\__Learn RBF alphas          : {}".format(args.learn_alphas))
-    print("  \\__Learn RBF gammas          : {}".format(args.learn_gammas))
-    if not args.learn_gammas:
-        print("  \\__RBF gamma                 : {}".format(1.0 / G.latent_size if args.gamma is None else args.gamma))
+    print("  \\__Number of Timesteps       : {}".format(args.num_timesteps))
+    print("  \\__Latent    Dimension       : {}".format(G.latent_size))
 
-    if args.shapes3d == True:
-        S = WaFlow(num_support_sets=args.num_support_sets,
-                        num_support_dipoles=args.num_support_dipoles,
-                        support_vectors_dim=G.latent_size,
-                        learn_alphas=args.learn_alphas,
-                        learn_gammas=args.learn_gammas,
-                        gamma=1.0 / G.latent_size if args.gamma is None else args.gamma,
-                        img_size=64,
-                        madelung_flow=args.madelung,
-                        group=args.particle_size
-                  )
-    else:
-        S = WaFlow(num_support_sets=args.num_support_sets,
-                  num_support_dipoles=args.num_support_dipoles,
-                  support_vectors_dim=G.latent_size,
-                  learn_alphas=args.learn_alphas,
-                  learn_gammas=args.learn_gammas,
-                  gamma=1.0 / G.latent_size if args.gamma is None else args.gamma,
-                  madelung_flow=args.madelung,
-                  group=args.particle_size
-                  )
+    S = HJPDE(num_support_sets=args.num_support_sets,
+              num_timesteps=args.num_timesteps,
+              support_vectors_dim=G.latent_size)
 
     S_Prior = WavePDE(num_support_sets=args.num_support_sets,
-              num_support_dipoles=args.num_support_dipoles,
-              support_vectors_dim=G.latent_size,
-              learn_alphas=args.learn_alphas,
-              learn_gammas=args.learn_gammas,
-              gamma=1.0 / G.latent_size if args.gamma is None else args.gamma)
+              num_timesteps=args.num_timesteps,
+              support_vectors_dim=G.latent_size)
 
     # Count number of trainable parameters
     print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in S.parameters() if p.requires_grad)))
 
-    # Build reconstructor model R
-    print("#. Build reconstructor model R...")
-
-    #R = Reconstructor(reconstructor_type=args.reconstructor_type,
-    #                  dim_index=S.num_support_sets,
-    #                  dim_time=S.num_support_dipoles,
-    #                  channels=1 if args.gan_type == 'SNGAN_MNIST' else 3)
-    if args.dsprites == True:
-        #R = ConvEncoder(num_channel=2,latent_size=256)
-        R = ConvEncoder2(n_cin=2, s_dim=4,n_hw=64)
-    elif args.shapes3d == True:
-        R = ConvEncoder2(n_cin=2, s_dim=15 * 15 + 1, n_hw=64)
-    else:
-        R = ConvEncoder2(n_cin=6, s_dim=args.latent_size, n_hw=28)
-        #R = Encoder(layer_sizes=[784*6,256], latent_size=args.num_support_sets)
 
     # Count number of trainable parameters
     print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in R.parameters() if p.requires_grad)))
 
     # Set up trainer
-    print("#. Experiment: {}".format(exp_dir))
-    config = {
-        'wandb_on': False,
-        'lr': 1e-4,
-        'momentum': 0.9,
-        'max_epochs': 100,
-        'eval_epochs': 5,
-        'dataset': 'DSprites',
-        'seq_transforms': ['posX', 'posY'],
-        'avail_transforms': ['posX', 'posY', 'orientation', 'scale', 'shape'],
-        'seed': 1,
-        'n_caps': 15,
-        'cap_dim': 15,
-        'n_transforms': args.num_support_dipoles // 2,
-        'max_transform_len': 30,
-        'mu_init': 30.0,
-        'n_off_diag': 0,
-        'group_kernel': (10, 10, 1),
-        'n_is_samples': 10
-    }
-    if args.dsprites:
-        #data_config['dataset']='DSPRITES'
-        print("DSPRITES DATASET LOADING")
-        #train_loader, val_loader, test_loader = preprocessor.get_dataloaders(batch_size=data_config['batch_size'])
-        #data_loader = get_dataloader(dir='/nfs/data_lambda/ysong/',
-        #                             seq_transforms=config['seq_transforms'],
-        #                             avail_transforms=config['avail_transforms'],
-        #                             seq_len=config['n_transforms'],
-        #                             max_transform_len=config['max_transform_len'],
-        #                             batch_size=args.batch_size)
-        dataset = DSpritesDataset(dir='/nfs/data_lambda/ysong/', seq_transforms=config['seq_transforms'],
-                        avail_transforms=config['avail_transforms'],
-                        max_transform_len=config['max_transform_len'],
-                        seq_len=config['n_transforms'])
-        data_loader = DataLoader(
-            dataset=dataset, batch_size=args.batch_size, shuffle=True, drop_last=True,
-            generator=torch.Generator(device='cuda'))
-        trn = TrainerOTScratchDsprites(params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu,
-                                data_loader=data_loader,dataset=dataset)
-    elif args.shapes3d:
+    if args.shapes3d:
         print("SHAPES3D DATASET LOADING")
         train_tx = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
