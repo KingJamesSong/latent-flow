@@ -260,12 +260,12 @@ class TrainerOTScratch(object):
                         loss_pde += loss_pde_tmp
                         rho_loss1 += rho_loss1_tmp
 
-                loss = vae_loss + rho_loss1 + loss_wave
+                loss = vae_loss + rho_loss1 + loss_pde
                 # Update statistics tracker
                 self.stat_tracker.update(
                     classification_loss=rho_loss1.item(),
                     regression_loss=vae_loss.item()
-                    pde_loss=loss_wave,
+                    pde_loss=loss_pde,
                     total_loss=loss.item())
                 loss.backward()
 
