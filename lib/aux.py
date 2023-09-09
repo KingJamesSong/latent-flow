@@ -13,20 +13,16 @@ from PIL import Image, ImageDraw
 class TrainingStatTracker(object):
     def __init__(self):
         self.stat_tracker = {
-            'accuracy_index': [],
-            'accuracy_time': [],
             'classification_loss': [],
             'regression_loss': [],
-            'wave_loss': [],
+            'pde_loss': [],
             'total_loss': []
         }
 
     def update(self, accuracy_index, accuracy_time, classification_loss, regression_loss, wave_loss, total_loss):
-        self.stat_tracker['accuracy_index'].append(float(accuracy_index))
-        self.stat_tracker['accuracy_time'].append(float(accuracy_time))
         self.stat_tracker['classification_loss'].append(float(classification_loss))
         self.stat_tracker['regression_loss'].append(float(regression_loss))
-        self.stat_tracker['wave_loss'].append(float(wave_loss))
+        self.stat_tracker['pde_loss'].append(float(wave_loss))
         self.stat_tracker['total_loss'].append(float(total_loss))
 
     def get_means(self):
