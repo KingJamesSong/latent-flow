@@ -56,62 +56,26 @@ def main():
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
+     G = ConvVAE2(num_channel=3, latent_size=18 * 18, img_size=128)
+     print("Intialize MNIST VAE")
 
-    if args.isaac == True:
-        G = ConvVAE2(num_channel=3, latent_size=18 * 18, img_size=128)
-        print("Intialize DSPRITES VAE")
-    else:
-        G = ConvVAE2(num_channel=3, latent_size=18 * 18, img_size=128)
-        print("Intialize MNIST VAE")
-
-    # Build Support Sets model S
-    print("#. Build Support Sets S...")
+    # Build PDEs
+    print("#. Build PDEs S...")
     print("  \\__Number of Support Sets    : {}".format(args.num_support_sets))
-    print("  \\__Number of Support Dipoles : {}".format(args.num_support_dipoles))
+    print("  \\__Number of Timesteps : {}".format(args.num_timesteps))
     print("  \\__Support Vectors dim       : {}".format(G.latent_size))
-    print("  \\__Learn RBF alphas          : {}".format(args.learn_alphas))
-    print("  \\__Learn RBF gammas          : {}".format(args.learn_gammas))
-    if not args.learn_gammas:
-        print("  \\__RBF gamma                 : {}".format(1.0 / G.latent_size if args.gamma is None else args.gamma))
+   
+    
+     S = HJPDE(num_support_sets=args.num_support_sets,
+               num_timesteps=args.num_timesteps,
+               support_vectors_dim=G.latent_size)
 
-    if args.isaac == True:
-        S = HJPDE(num_support_sets=args.num_support_sets,
-                        num_support_dipoles=args.num_support_dipoles,
-                        support_vectors_dim=G.latent_size,
-                        learn_alphas=args.learn_alphas,
-                        learn_gammas=args.learn_gammas,
-                        gamma=1.0 / G.latent_size if args.gamma is None else args.gamma,
-                        img_size=64
-                  )
-    else:
-        S = HJPDE(num_support_sets=args.num_support_sets,
-                  num_support_dipoles=args.num_support_dipoles,
-                  support_vectors_dim=G.latent_size,
-                  learn_alphas=args.learn_alphas,
-                  learn_gammas=args.learn_gammas,
-                  gamma=1.0 / G.latent_size if args.gamma is None else args.gamma
-                  )
-
-    S_Prior = WavePDE(num_support_sets=args.num_support_sets,
-              num_support_dipoles=args.num_support_dipoles,
-              support_vectors_dim=G.latent_size,
-              learn_alphas=args.learn_alphas,
-              learn_gammas=args.learn_gammas,
-              gamma=1.0 / G.latent_size if args.gamma is None else args.gamma)
+    S_Prior = DiffPDE(num_support_sets=args.num_support_sets,
+              num_timesteps=args.num_timesteps,
+              support_vectors_dim=G.latent_size)
 
     # Count number of trainable parameters
     print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in S.parameters() if p.requires_grad)))
-
-    # Build reconstructor model R
-    print("#. Build reconstructor model R...")
-
-    if args.isaac == True:
-        R = ConvEncoder2(n_cin=6*3, s_dim=18 * 18, n_hw=128)
-    else:
-        R = ConvEncoder2(n_cin=6*3, s_dim=18 * 18, n_hw=128)
-
-    # Count number of trainable parameters
-    print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in R.parameters() if p.requires_grad)))
 
     # Set up trainer
     print("#. Experiment: {}".format(exp_dir))
@@ -140,8 +104,8 @@ def main():
                                 data_loader=data_loader)
 
     # Train
-    trn.train(generator=G, support_sets=S, reconstructor=R, prior = S_Prior)
-    trn.eval(generator=G, support_sets=S, reconstructor=R, prior = S_Prior)
+    trn.train(generator=G, support_sets=S, prior = S_Prior)
+    trn.eval(generator=G, support_sets=S, prior = S_Prior)
 
 
 if __name__ == '__main__':
