@@ -131,8 +131,8 @@ def main():
                                 data_loader=data_loader)
 
     # Train
-    trn.train(generator=G, support_sets=S, reconstructor=R, prior = S_Prior)
-    trn.eval(generator=G, support_sets=S, reconstructor=R, prior = S_Prior)
+    trn.train(generator=G, support_sets=S, prior = S_Prior)
+    trn.eval(generator=G, support_sets=S, prior = S_Prior)
 
 
 if __name__ == '__main__':
