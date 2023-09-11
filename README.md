@@ -6,7 +6,7 @@ NeurIPS23 "Flow Factorized Representation Learning"
 
 
 <p align="center">
-<img src="surface.jpg" width="800px"/>
+<img src="surface.jpg" width="400px"/>
 <br>
 Illustration of our flow factorized repre- sentation learning: at each point in the latent space we have a distinct set of tangent directions ∇uk which define different transformations we would like to model in the image space. For each path, the latent sample evolves to the target on the potential landscape following dynamic optimal transport.
 </p>
