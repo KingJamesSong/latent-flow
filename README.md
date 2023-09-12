@@ -7,14 +7,14 @@ NeurIPS23 "Flow Factorized Representation Learning"
 
 ## Overview
 
-<p align="left">
-<img src="surface.jpg" width="300px"/>
+<p align="center">
+<img src="surface.jpg" width="400px"/>
 <br>
 Illustration of our flow factorized representation learning: at each point in the latent space we have a distinct set of tangent directions ∇uk which define different transformations we would like to model in the image space. For each path, the latent sample evolves to the target on the potential landscape following dynamic optimal transport.
 </p>
 
-<p align="right">
-<img src="graphical_model.png" width="500px"/>
+<p align="center">
+<img src="graphical_model.png" width="600px"/>
 <br>
 Depiction of our model in plate notation. (Left) Supervised, (Right) Weakly-supervised. White nodes denote latent variables, shaded nodes denote observed variables, solid lines denote the generative model, and dashed lines denote the approximate posterior. We see, as in a standard VAE framework, our model approximates the initial one-step posterior p(z0|x0), but additionally approximates the conditional transition distribution p(zt|zt−1, k) through dynamic optimal transport over a potential landscape.
 </p>
