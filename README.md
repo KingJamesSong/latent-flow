@@ -6,7 +6,7 @@ NeurIPS23 "Flow Factorized Representation Learning"
 <sup>2</sup>University of Trento, Italy <be> 
 
 
-# Overview
+## Overview
 
 <p align="center">
 <img src="surface.jpg" width="400px"/>
@@ -20,3 +20,21 @@ Illustration of our flow factorized representation learning: at each point in th
 Depiction of our model in plate notation. (Left) Supervised, (Right) Weakly-supervised. White nodes denote latent variables, shaded nodes denote observed variables, solid lines denote the generative model, and dashed lines denote the approximate posterior. We see, as in a standard VAE framework, our model approximates the initial one-step posterior p(z0|x0), but additionally approximates the conditional transition distribution p(zt|zt−1, k) through dynamic optimal transport over a potential landscape.
 </p>
 
+## Training
+
+
+
+## Citation
+
+If you think the code is helpful to your research, please consider citing our paper:
+
+```
+@inproceedings{song2023flow,
+  title={Flow Factorized Representation Learning},
+  author={Song, Yue and Keller, Andy and Sebe, Nicu and Welling, Max},
+  booktitle={NeurIPS},
+  year={2023}
+}
+```
+
+If you have any questions or suggestions, please feel free to contact me via `yue.song@unitn.it`.
