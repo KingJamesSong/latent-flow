@@ -233,14 +233,10 @@ class TrainerOTScratch(object):
                 rho_t = prob_zt.log_prob(z)
                 vae_loss = self.loss_fn(recon_x, x, mean, log_var)
                 for t in range(1, half_range+1):
-                    with torch.no_grad():
-                        x_t = mnist_trans(x,index,t-1)
-                    zt_mu,zt_logvar = generator.encoder(x_t)
-                    zt_std = torch.exp(zt_logvar / 2.0)
-
+        
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
 
-                    energy, loss_pde_tmp, uz, uzz = support_sets(index, z, time_stamp, zt_mu, zt_std)
+                    energy, loss_pde_tmp, uz, uzz = support_sets(index, z, time_stamp)
                     _, _, _, uzz_prior = prior(index, z, time_stamp, rho)
 
                     rho_t = rho_t - (uzz+1).abs().log()
