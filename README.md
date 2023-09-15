@@ -6,17 +6,14 @@ NeurIPS23 "Flow Factorized Representation Learning"
 <sup>1</sup>University of Amsterdam, the Netherlands <br>
 <sup>2</sup>University of Trento, Italy <be> 
 
-<div style="display:inline-block" align="center">
-<img src="imgs/falor1.gif" width="96" height="96" />  <img src="imgs/issac1.gif" width="96" height="96" />  <img src="imgs/issac2.gif" width="96" height="96" /> 
-</div>
 
-<div style="display:inline-block" align="center">
-<img src="imgs/mnist_trans1 (2).gif" /> <img src="imgs/shapes_trans1 (1).gif" width="140" height="28" /> 
-<br>
-<img src="imgs/mnist_trans2 (2).gif" /> <img src="imgs/shapes_trans2 (1).gif" width="140" height="28" /> 
-<br>
-<img src="imgs/mnist_trans3 (2).gif" /> <img src="imgs/shapes_trans3 (1).gif" width="140" height="28" /> 
-</div>
+
+
+| MNIST        |                    Shapes3D                     |  Falcol3D  | Isaac3D |
+:-------------------------:|:-------------------------------------------:|:-------------------------:|:-------------------------:|
+|<img src="imgs/mnist_trans1 (2).gif" /><br> <img src="imgs/mnist_trans2 (2).gif" /><br><img src="imgs/mnist_trans3 (2).gif" />| <img src="imgs/shapes_trans1 (1).gif" width="140" height="28" /> <br><img src="imgs/shapes_trans2 (1).gif" width="140" height="28" /> <br> <img src="imgs/shapes_trans3 (1).gif" width="140" height="28" /> |<img src="imgs/falor1.gif" width="96" height="96" />| <img src="imgs/issac1.gif" width="96" height="96" />  <img src="imgs/issac2.gif" width="96" height="96" /> |
+
+
 
 ## Overview
 
