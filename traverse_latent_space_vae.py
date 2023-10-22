@@ -193,7 +193,7 @@ def main():
 
     
     S = HJPDE(num_support_sets=args_json.__dict__["num_support_sets"],
-                num_support_dipoles=args_json.__dict__["num_predictor"],
+                num_timesteps=args_json.__dict__["num_timesteps"],
                 support_vectors_dim=G.latent_size)
 
     if args.verbose:
