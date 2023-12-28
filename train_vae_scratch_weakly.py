@@ -1,7 +1,7 @@
 import argparse
 import torch
 from lib import *
-from models.vae import ConvVAE, ConvEncoder3
+from vae import ConvVAE, ConvEncoder3
 from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision import transforms
