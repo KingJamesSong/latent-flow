@@ -180,7 +180,7 @@ class TrainerOTScratch(object):
         vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.reconstructor_lr)
 
         # Get starting iteration
-        starting_iter = self.get_starting_iteration(support_sets, reconstructor,generator,prior)
+        starting_iter = self.get_starting_iteration(support_sets,generator,prior)
 
         # Parallelize `generator` and `reconstructor` into multiple GPUs, if available and `multi_gpu=True`.
         if self.multi_gpu:
@@ -233,7 +233,8 @@ class TrainerOTScratch(object):
                 rho_t = prob_zt.log_prob(z)
                 vae_loss = self.loss_fn(recon_x, x, mean, log_var)
                 for t in range(1, half_range+1):
-        
+                    with torch.no_grad():
+                        x_t = mnist_trans(x,index,t)
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
 
                     energy, loss_pde_tmp, uz, uzz = support_sets(index, z, time_stamp)
@@ -358,7 +359,7 @@ class TrainerOTScratch(object):
                     #z_prior = z.clone()
                 for t in range(1, self.params.num_support_dipoles // 2):
                     with torch.no_grad():
-                        x_t = mnist_trans(x, index, t-1)
+                        x_t = mnist_trans(x, index, t)
                         _, mean_xt, log_var_xt, _ = generator(x_t)
                         std_xt = torch.exp(log_var_xt / 2.0)
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
@@ -384,7 +385,7 @@ class TrainerOTScratch(object):
                 eq_loss = 0.0
                 for t in range(1, self.params.num_support_dipoles // 2):
                     with torch.no_grad():
-                        x_t = mnist_trans(x, index, t-1)
+                        x_t = mnist_trans(x, index, t)
                         _, mean_xt, log_var_xt, _ = generator(x_t)
                         std_xt = torch.exp(log_var_xt / 2.0)
                     _, shift, u_zz = support_sets.inference(index, z, t * torch.ones(1, 1, requires_grad=True),mean_xt,std_xt)
