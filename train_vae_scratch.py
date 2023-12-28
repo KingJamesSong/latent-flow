@@ -101,31 +101,17 @@ def main():
     print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in S.parameters() if p.requires_grad)))
 
 
-    # Set up trainer
-    if args.shapes3d:
-        print("SHAPES3D DATASET LOADING")
-        train_tx = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
-        dataset = Shapes3D(root='/nfs/data_lambda/ysong/3dshapes.h5', train=True, transform=None)
-        #train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset)*0.8), int(len(dataset)*0.2)],generator=torch.Generator(device='cuda'))
-        data_loader = DataLoader(
-            dataset=dataset, batch_size=args.batch_size, shuffle=True, drop_last=True,
-            generator=torch.Generator(device='cuda'))
-        trn = TrainerOTScratchShapes(params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu,
-                               data_loader=data_loader,dataset=dataset)
-    else:
-        print("MNIST DATASET LOADING")
-        #train_loader, val_loader, test_loader = preprocessor.get_dataloaders(batch_size=data_config['batch_size'])
-        dataset = MNIST(root='/nfs/data_lambda/ysong/', train=True, transform=transforms.ToTensor(),download=True)
-        #train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
-        #dataset = DSprites(root='/nfs/data_chaos/ysong/simplegan_experiments/dataset', transform=transforms.ToTensor())
-        data_loader = DataLoader(
-            dataset=dataset, batch_size=args.batch_size, shuffle=True, drop_last=True,
-            generator=torch.Generator(device='cuda'))
-        trn = TrainerOTScratch(params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu,
-                                data_loader=data_loader)
+    
+   print("MNIST DATASET LOADING")
+   #train_loader, val_loader, test_loader = preprocessor.get_dataloaders(batch_size=data_config['batch_size'])
+   dataset = MNIST(root='/nfs/data_lambda/ysong/', train=True, transform=transforms.ToTensor(),download=True)
+   #train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
+   #dataset = DSprites(root='/nfs/data_chaos/ysong/simplegan_experiments/dataset', transform=transforms.ToTensor())
+   data_loader = DataLoader(
+       dataset=dataset, batch_size=args.batch_size, shuffle=True, drop_last=True,
+       generator=torch.Generator(device='cuda'))
+   trn = TrainerOTScratch(params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu,
+                           data_loader=data_loader)
 
     # Train
     trn.train(generator=G, support_sets=S, prior = S_Prior)
