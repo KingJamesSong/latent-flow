@@ -293,7 +293,7 @@ class TrainerOTScratchWeakly(object):
                 self.stat_tracker.update(
                     classification_loss=rho_loss1.item(),
                     regression_loss=vae_loss.item(), #+ latent_loss.item(),
-                    loss_pde=loss_wave,
+                    loss_pde=loss_pde,
                     total_loss=loss.item())
                 loss.backward()
 
