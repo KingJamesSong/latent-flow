@@ -368,6 +368,10 @@ def main():
                     z = z + args.eps * shift
             text_save(osp.join(transformed_images_root_dir, 'shift_{:03d}.txt'.format(dim)), shift_wave)
             text_save(osp.join(transformed_images_root_dir, 'wave_{:03d}.txt'.format(dim)), energy_wave)
+            current_path_latent_codes = torch.cat(current_path_latent_codes)
+            current_path_latent_codes_batches = torch.split(current_path_latent_codes, args.batch_size)
+            current_path_latent_shifts = torch.cat(current_path_latent_shifts)
+            current_path_latent_shifts_batches = torch.split(current_path_latent_shifts, args.batch_size)
             if len(current_path_latent_codes_batches) != len(current_path_latent_shifts_batches):
                 raise AssertionError()
             else:
