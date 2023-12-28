@@ -101,9 +101,6 @@ def main():
     print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in S.parameters() if p.requires_grad)))
 
 
-    # Count number of trainable parameters
-    print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in R.parameters() if p.requires_grad)))
-
     # Set up trainer
     if args.shapes3d:
         print("SHAPES3D DATASET LOADING")
