@@ -45,12 +45,17 @@ class AddRandomTransformationDims(object):
         bsz_colors = torch.ones(x.shape[0], device=x.device)
         bsz_scales = torch.ones(x.shape[0], 2, device=x.device)
         if transform_type == 0:
-            M = kornia.get_rotation_matrix2d(center, bsz_angles * 0.0, bsz_scales * scale).to(x.device)
-            x_t = kornia.warp_affine(x, M, dsize=(h, w))
+            # scale transformation
+            M = kornia.geometry.transform.get_rotation_matrix2d(center, bsz_angles * 0.0, bsz_scales * scale).to(
+                x.device
+            )
+            x_t = kornia.geometry.transform.warp_affine(x, M, dsize=(h, w))
         elif transform_type == 1:
-            M = kornia.get_rotation_matrix2d(center, bsz_angles * angle, bsz_scales).to(x.device)
-            x_t = kornia.warp_affine(x, M, dsize=(h, w))
+            # rotation transformation
+            M = kornia.geometry.transform.get_rotation_matrix2d(center, bsz_angles * angle, bsz_scales).to(x.device)
+            x_t = kornia.geometry.transform.warp_affine(x, M, dsize=(h, w))
         elif transform_type == 2:
+            # color transformation
             x_t = kornia.enhance.adjust_hue(x, bsz_colors * color)
         return x_t
 

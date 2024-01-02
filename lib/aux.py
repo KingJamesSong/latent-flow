@@ -14,10 +14,10 @@ class TrainingStatTracker(object):
     def __init__(self):
         self.stat_tracker = {"classification_loss": [], "regression_loss": [], "pde_loss": [], "total_loss": []}
 
-    def update(self, accuracy_index, accuracy_time, classification_loss, regression_loss, wave_loss, total_loss):
+    def update(self, classification_loss, regression_loss, pde_loss, total_loss):
         self.stat_tracker["classification_loss"].append(float(classification_loss))
         self.stat_tracker["regression_loss"].append(float(regression_loss))
-        self.stat_tracker["pde_loss"].append(float(wave_loss))
+        self.stat_tracker["pde_loss"].append(float(pde_loss))
         self.stat_tracker["total_loss"].append(float(total_loss))
 
     def get_means(self):

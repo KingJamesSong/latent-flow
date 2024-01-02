@@ -235,7 +235,7 @@ class TrainerOTScratch(object):
                     half_range = self.params.num_support_dipoles // 2
                 else:
                     # default sets to max possible value
-                    half_range = mnist_trans.max_step
+                    half_range = mnist_trans.max_step - 1
                 # If you want to have x_0 start with different angle/color/scale
                 # x = mnist_trans(x, torch.randint(0, self.params.num_support_sets,(1,1)), torch.randint(0, half_range//2,(1,1)) )
                 recon_x, mean, log_var, z = generator(x)
