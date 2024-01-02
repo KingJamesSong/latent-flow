@@ -54,6 +54,10 @@ class AddRandomTransformationDims(object):
             x_t = kornia.enhance.adjust_hue(x, bsz_colors * color)
         return x_t
 
+    @property
+    def max_step(self):
+        return min(len(self.angle_set), len(self.color_set), len(self.scale_set))
+
 
 class AddDualTransformationDims(object):
     def __init__(self, angle_set, color_set, scale_set):

@@ -185,7 +185,7 @@ class TrainerOTScratch(object):
         )
 
         # Set VAE optimizer
-        vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.reconstructor_lr)
+        vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.generator_lr)
 
         # Get starting iteration
         starting_iter = self.get_starting_iteration(support_sets, generator, prior)
@@ -222,12 +222,16 @@ class TrainerOTScratch(object):
                 # Set gradients to zero
                 vae_optimizer.zero_grad()
                 support_sets.zero_grad()
-                reconstructor.zero_grad()
+                # reconstructor.zero_grad() # TODO: maybe this is supposed to be generator.zero_grad()??
                 if self.use_cuda:
                     x = mnist_color(x.cuda())
 
                 index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-                half_range = self.params.num_support_dipoles // 2
+                if hasattr(self.params, "num_support_dipoles"):
+                    half_range = self.params.num_support_dipoles // 2
+                else:
+                    # default sets to max possible value
+                    half_range = mnist_trans.max_step
                 # If you want to have x_0 start with different angle/color/scale
                 # x = mnist_trans(x, torch.randint(0, self.params.num_support_sets,(1,1)), torch.randint(0, half_range//2,(1,1)) )
                 recon_x, mean, log_var, z = generator(x)
