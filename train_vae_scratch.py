@@ -55,6 +55,13 @@ def main():
         default=1e-4,
         help="set learning rate for learning PDEs",
     )
+    # === VAE ======================================================================================================== #
+    parser.add_argument(
+        "--generator_lr",
+        type=float,
+        default=1e-4,
+        help="set learning rate for learning VAE (generator)",
+    )
     # === Training =================================================================================================== #
     parser.add_argument(
         "--max-iter",
