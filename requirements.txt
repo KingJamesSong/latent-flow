@@ -4,3 +4,4 @@ numpy
 pandas
 torch
 tensorboard
+h5py
