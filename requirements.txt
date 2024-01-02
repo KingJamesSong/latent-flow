@@ -1,0 +1,6 @@
+packaging
+kornia
+numpy
+pandas
+torch
+tensorboard
