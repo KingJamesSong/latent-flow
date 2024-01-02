@@ -3,12 +3,13 @@ import os.path as osp
 import argparse
 import torch
 import json
+import numpy as np
 from torch import nn
 from hashlib import sha1
 from torchvision.transforms import ToPILImage
-from lib import *
-from vae import VAE, ConvVAE, ConvVAE2
-import numpy as np
+
+from latent_flow.models.vae import ConvVAE, ConvVAE2
+from latent_flow.trainers.aux import sample_z, update_progress, update_stdout
 
 
 def tensor2image(tensor, adaptive=False):

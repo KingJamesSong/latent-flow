@@ -1,20 +1,17 @@
 import argparse
 import torch
-from vae import ConvVAE
+
 from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from torchsummary import summary
 
-from torch.utils.data import DataLoader
-from pathlib import Path
-
-from lib.aux import create_exp_dir
-from lib.DiffPDE import DiffPDE
-from lib.HJPDE import HJPDE
-from lib.trainer_ot_scratch import TrainerOTScratch
-from vae import ConvVAE
+from latent_flow.trainers.aux import create_exp_dir
+from latent_flow.models.vae import ConvVAE
+from latent_flow.models.DiffPDE import DiffPDE
+from latent_flow.models.HJPDE import HJPDE
+from latent_flow.trainers.trainer_ot_scratch import TrainerOTScratch
 
 
 def main():

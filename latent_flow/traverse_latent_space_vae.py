@@ -6,9 +6,12 @@ from torch import nn
 from PIL import Image, ImageDraw
 import json
 from torchvision.transforms import ToPILImage
-from lib import *
+
 import numpy as np
-from vae import ConvVAE, ConvVAE2
+
+from latent_flow.models.vae import ConvVAE, ConvVAE2
+from latent_flow.models.HJPDE import HJPDE
+from latent_flow.trainers.aux import update_progress, update_stdout
 
 
 def text_save(filename, data):

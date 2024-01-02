@@ -1,15 +1,18 @@
 import argparse
 import torch
-from lib import *
-from vae import ConvVAE, ConvEncoder3
+
 from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision
-import numpy as np
-import os
-from transforms import *
-from Shapes3d import *
+
+from latent_flow.trainers.aux import create_exp_dir
+from latent_flow.datasets.Shapes3d import Shapes3D
+from latent_flow.models.vae import ConvVAE, ConvEncoder3
+from latent_flow.models.DiffPDE import DiffPDE
+from latent_flow.models.HJPDE import HJPDE
+from latent_flow.trainers.trainer_ot_scratch_weakly import TrainerOTScratchWeakly
+from latent_flow.trainers.trainer_ot_scratch_weakly_shapes import TrainerOTScratchWeaklyShapes
 
 torch.set_default_tensor_type("torch.cuda.FloatTensor")
 

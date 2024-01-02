@@ -13,11 +13,27 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tensorboard import program
 from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
-from transforms import *
+
+# from transforms import *
 from torch.distributions.normal import Normal
 from torch.autograd import grad
 
-torch.autograd.set_detect_anomaly(True)
+angle_set = [0, 10, 20, 30, 40, 50, 60, 70, 80]
+color_set = [180, 200, 220, 240, 260, 280, 300, 320, 340]
+scale_set = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]
+# mnist_trans = AddRandomTransformationDims(angle_set=angle_set, color_set=color_set, scale_set=scale_set)
+# mnist_color = To_Color()
+
+
+def idx2onehot(idx, n):
+    assert torch.max(idx).item() < n
+
+    if idx.dim() == 1:
+        idx = idx.unsqueeze(1)
+    onehot = torch.zeros(idx.size(0), n).to(idx.device)
+    onehot.scatter_(1, idx, 1)
+
+    return onehot
 
 
 def log_normal_diag(x, mean, log_var, average=False, dim=None):
@@ -33,7 +49,7 @@ class DataParallelPassthrough(nn.DataParallel):
             return getattr(self.module, name)
 
 
-class TrainerFalcolIsaacScratch(object):
+class TrainerOTScratchWeakly(object):
     def __init__(
         self,
         params=None,
@@ -85,19 +101,21 @@ class TrainerFalcolIsaacScratch(object):
         self.cross_entropy = nn.CrossEntropyLoss()
         # Define KL Div
         self.kl_div = nn.KLDivLoss(reduction="batchmean", log_target=True)
+        self.kl_index = nn.KLDivLoss(reduction="batchmean", log_target=False)
         # Array of iteration times
         self.iter_times = np.array([])
 
         # Set up training statistics tracker
         self.stat_tracker = TrainingStatTracker()
 
-    def get_starting_iteration(self, support_sets, generator, prior):
+    def get_starting_iteration(self, support_sets, reconstructor, generator, prior):
         starting_iter = 1
         if osp.isfile(self.checkpoint):
             checkpoint_dict = torch.load(self.checkpoint)
             starting_iter = checkpoint_dict["iter"]
             support_sets.load_state_dict(checkpoint_dict["support_sets"])
             prior.load_state_dict(checkpoint_dict["prior"])
+            reconstructor.load_state_dict(checkpoint_dict["reconstructor"])
             generator.load_state_dict(checkpoint_dict["vae"])
         return starting_iter
 
@@ -124,6 +142,15 @@ class TrainerFalcolIsaacScratch(object):
         return KLD
 
     def log_progress(self, iteration, mean_iter_time, elapsed_time, eta):
+        """Log progress in terms of batch accuracy, classification and regression losses and ETA.
+
+        Args:
+            iteration (int)        : current iteration
+            mean_iter_time (float) : mean iteration time
+            elapsed_time (float)   : elapsed time until current iteration
+            eta (float)            : estimated time of experiment completion
+
+        """
         # Get current training stats (for the previous `self.params.log_freq` steps) and flush them
         stats = self.stat_tracker.get_means()
 
@@ -156,7 +183,15 @@ class TrainerFalcolIsaacScratch(object):
         print("         ===================================================================")
         update_stdout(10)
 
-    def train(self, generator, support_sets, prior):
+    def train(self, generator, support_sets, reconstructor, prior):
+        """Training function.
+
+        Args:
+            generator     :
+            support_sets  :
+            reconstructor :
+
+        """
         # Save initial `support_sets` model as `support_sets_init.pt`
         torch.save(support_sets.state_dict(), osp.join(self.models_dir, "support_sets_init.pt"))
 
@@ -165,10 +200,12 @@ class TrainerFalcolIsaacScratch(object):
         if self.use_cuda:
             generator.cuda().train()
             support_sets.cuda().train()
+            reconstructor.cuda().train()
             prior.cuda().train()
         else:
             generator.train()
             support_sets.train()
+            reconstructor.train()
             prior.train()
 
         # Set support sets optimizer
@@ -180,13 +217,17 @@ class TrainerFalcolIsaacScratch(object):
         # Set VAE optimizer
         vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.reconstructor_lr)
 
+        # Set shift predictor optimizer
+        reconstructor_optim = torch.optim.Adam(reconstructor.parameters(), lr=self.params.reconstructor_lr)
+
         # Get starting iteration
         starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator, prior)
 
-        # Parallelize `generator` into multiple GPUs, if available and `multi_gpu=True`.
+        # Parallelize `generator` and `reconstructor` into multiple GPUs, if available and `multi_gpu=True`.
         if self.multi_gpu:
             print("#. Parallelize G, R over {} GPUs...".format(torch.cuda.device_count()))
             generator = DataParallelPassthrough(generator)
+            reconstructor = DataParallelPassthrough(reconstructor)
             cudnn.benchmark = True
 
         # Check starting iteration
@@ -207,43 +248,56 @@ class TrainerFalcolIsaacScratch(object):
 
         # Get experiment's start time
         t0 = time.time()
-        # self.params.max_iter = self.params.max_iter - starting_iter + 1
-        # starting_iter = 0
-        # Start training
         iteration = starting_iter
         while iteration <= self.params.max_iter:
             # for iteration in range(starting_iter, self.params.max_iter + 1):
-            for i, (data, index) in enumerate(self.data_loader):
-                index = index[0]
-                next_index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-                self.data_loader.dataset.index = next_index
+            for i, (x, y) in enumerate(self.data_loader):
                 iteration = iteration + 1
+                # Get current iteration's start time
+                iter_t0 = time.time()
+
                 # Set gradients to zero
                 vae_optimizer.zero_grad()
-                support_sets.zero_grad()
-                reconstructor.zero_grad()
+                support_sets_optim.zero_grad()
+                reconstructor_optim.zero_grad()
                 if self.use_cuda:
-                    data = [t.cuda() for t in data]
-                x = data[0]
+                    x = mnist_color(x.cuda())
 
-                iter_t0 = time.time()
+                # Generate one-hot index
+                index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
+                onehot_idx = torch.zeros(x.size(0), self.params.num_support_sets, requires_grad=False)
+                onehot_idx[:, index] = 1.0
+
                 half_range = self.params.num_support_dipoles // 2
-
                 recon_x, mean, log_var, z = generator(x)
-                # prior probability
+
                 std = torch.exp(log_var / 2.0)
                 prob_z = Normal(0.0, 1.0)
                 rho = prob_z.log_prob(z)
-                # posterior probability
+
                 prob_zt = Normal(mean, std)
                 rho_t = prob_zt.log_prob(z)
-                vae_loss = self.loss_fn(recon_x, x, mean, log_var)
-                for t in range(1, half_range):
-                    x_t = data[t]
-                    time_stamp = t * torch.ones(1, 1, requires_grad=True)
-                    energy, loss_pde_tmp, uz, uzz = support_sets(index, z, time_stamp)
+                # Predict index from sequence
+                x_seq = x
+                for t in range(1, half_range + 1):
+                    with torch.no_grad():
+                        x_t = mnist_trans(x, index, t)
+                    x_seq = torch.cat([x_seq, x_t], dim=1)
+                index_pred = reconstructor(x_seq, iteration)
 
-                    _, _, _, uzz_prior = prior(index, z, time_stamp, rho)
+                vae_loss = self.loss_fn(recon_x, x, mean, log_var) + self.kl_index(
+                    (index_pred + 1e-20).log(), (onehot_idx + 1e-20)
+                )
+
+                for t in range(1, half_range + 1):
+                    with torch.no_grad():
+                        x_t = mnist_trans(x, index, t)
+                    # zt_mu, zt_logvar = generator.encoder(x_t)
+                    # z_t = generator.encoder.reparameterize(zt_mu, zt_logvar)
+
+                    time_stamp = t * torch.ones(1, 1, requires_grad=True)
+                    energy, loss_pde_tmp, uz, uzz = support_sets.index_forward(index_pred, z, time_stamp)
+                    _, _, _, uzz_prior = prior.index_forward(index_pred, z, time_stamp, rho)
 
                     rho_t = rho_t - (uzz + 1).abs().log()
                     rho = rho - (uzz_prior + 1).abs().log()
@@ -256,10 +310,10 @@ class TrainerFalcolIsaacScratch(object):
                     img_shifted = generator.inference(z)
 
                     vae_loss += self.bce(img_shifted, x_t)
-
                     if t == 1:
                         loss_pde = loss_pde_tmp
                         rho_loss1 = rho_loss1_tmp
+
                     else:
                         loss_pde += loss_pde_tmp
                         rho_loss1 += rho_loss1_tmp
@@ -268,13 +322,17 @@ class TrainerFalcolIsaacScratch(object):
                 # Update statistics tracker
                 self.stat_tracker.update(
                     classification_loss=rho_loss1.item(),
-                    regression_loss=vae_loss.item(),
-                    pde_loss=loss_pde.item(),
+                    regression_loss=vae_loss.item(),  # + latent_loss.item(),
+                    loss_pde=loss_pde,
                     total_loss=loss.item(),
                 )
                 loss.backward()
 
+                # torch.nn.utils.clip_grad_norm_(support_sets.parameters(), 5)
+                # torch.nn.utils.clip_grad_norm_(generator.parameters(), 5)
+                # Perform optimization step (parameter update)
                 support_sets_optim.step()
+                reconstructor_optim.step()
                 vae_optimizer.step()
 
                 # Update tensorboard plots for training statistics
@@ -301,7 +359,7 @@ class TrainerFalcolIsaacScratch(object):
                 if iteration % self.params.log_freq == 0:
                     self.log_progress(iteration, mean_iter_time, elapsed_time, eta)
 
-                # Save checkpoint model file and support_sets model state dicts after current iteration
+                # Save checkpoint model file and support_sets / reconstructor model state dicts after current iteration
                 if iteration % self.params.ckp_freq == 0:
                     # Build checkpoint dict
                     checkpoint_dict = {
@@ -309,12 +367,26 @@ class TrainerFalcolIsaacScratch(object):
                         "support_sets": support_sets.state_dict(),
                         "prior": prior.state_dict(),
                         "vae": generator.state_dict(),
+                        "reconstructor": reconstructor.module.state_dict()
+                        if self.multi_gpu
+                        else reconstructor.state_dict(),
                     }
                     torch.save(checkpoint_dict, self.checkpoint)
         # === End of training loop ===
 
         # Get experiment's total elapsed time
         elapsed_time = time.time() - t0
+
+        # Save final support sets model
+        support_sets_model_filename = osp.join(self.models_dir, "support_sets.pt")
+        torch.save(support_sets.state_dict(), support_sets_model_filename)
+
+        # Save final shift predictor model
+        reconstructor_model_filename = osp.join(self.models_dir, "reconstructor.pt")
+        torch.save(
+            reconstructor.module.state_dict() if self.multi_gpu else reconstructor.state_dict(),
+            reconstructor_model_filename,
+        )
 
         for _ in range(10):
             print()
@@ -331,21 +403,19 @@ class TrainerFalcolIsaacScratch(object):
         except IOError as e:
             print("  \\__Already exists -- {}".format(e))
 
-    def eval(self, generator, support_sets, prior):
+    def eval(self, generator, support_sets, reconstructor, prior):
         neg_likelihood = []
         starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator, prior)
         support_sets.eval()
+        reconstructor.eval()
         generator.eval()
         prior.eval()
         prior_z0 = Normal(0.0, 1.0)
-        for i, (data, index) in enumerate(self.data_loader):
-            index = index[0]
-            next_index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-            self.data_loader.dataset.index = next_index
+        for i, (x, y) in enumerate(self.data_loader):
             with torch.no_grad():
                 if self.use_cuda:
-                    data = [t.cuda() for t in data]
-                x = data[0]
+                    x = x.cuda()
+                    x = mnist_color(x.cuda())
                 recon_x, mean, log_var, z = generator(x)
                 std = torch.exp(log_var / 2.0)
                 q = Normal(mean, std)
@@ -357,103 +427,67 @@ class TrainerFalcolIsaacScratch(object):
                 neg_likelihood.append(neg_logpx_z.sum() / recon_x.size(0))
         print("logpx", sum(neg_likelihood) / len(neg_likelihood))
         neg_likelihood_transformed = []
-        for i, (data, index) in enumerate(self.data_loader):
-            index = index[0]
-            next_index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-            self.data_loader.dataset.index = next_index
+        for i, (x, y) in enumerate(self.data_loader):
             with torch.no_grad():
                 if self.use_cuda:
-                    data = [t.cuda() for t in data]
-                x = data[0]
-                recon_x, mean, log_var, z = generator(x)
-                std = torch.exp(log_var / 2.0)
-                q = Normal(mean, std)
-                log_q_z = q.log_prob(z)
-                log_p_z = prior_z0.log_prob(z)
-            for t in range(1, self.params.num_support_dipoles // 2):
-                x_t = data[t]
-                time_stamp = t * torch.ones(1, 1, requires_grad=True)
-                _, uz, uzz = support_sets.inference(index, z, time_stamp)
-                _, _, uzz_prior = prior.inference(index, z, time_stamp)
+                    x = x.cuda()
+                    x = mnist_color(x.cuda())
+            for index in range(0, 3):
                 with torch.no_grad():
-                    log_q_z -= (uzz + 1).abs().log()
-                    log_p_z -= (uzz_prior + 1).abs().log()
-                    z += uz
-                    img_shifted = generator.inference(z)
-                    p = Normal(loc=img_shifted, scale=1.0)
-                    neg_logpx_z = (
-                        -1 * p.log_prob(x_t).flatten(start_dim=1).sum(-1, keepdim=True)
-                        + log_p_z.flatten(start_dim=1).sum(-1, keepdim=True)
-                        - log_q_z.flatten(start_dim=1).sum(-1, keepdim=True)
-                    )
-                    neg_likelihood_transformed.append(neg_logpx_z.sum() / recon_x.size(0))
+                    recon_x, mean, log_var, z = generator(x)
+                    std = torch.exp(log_var / 2.0)
+                    q = Normal(mean, std)
+                    log_q_z = q.log_prob(z)
+                    log_p_z = prior_z0.log_prob(z)
+                for t in range(1, self.params.num_support_dipoles // 2):
+                    x_t = mnist_trans(x, index, t)
+                    time_stamp = t * torch.ones(1, 1, requires_grad=True)
+                    _, uz, uzz = support_sets.inference(index, z, time_stamp)
+                    _, _, uzz_prior = prior.inference(index, z, time_stamp)
+                    with torch.no_grad():
+                        log_q_z -= (uzz + 1).abs().log()
+                        log_p_z -= (uzz_prior + 1).abs().log()
+                        z += uz
+                        img_shifted = generator.inference(z)
+                        p = Normal(loc=img_shifted, scale=1.0)
+                        neg_logpx_z = (
+                            -1 * p.log_prob(x_t).flatten(start_dim=1).sum(-1, keepdim=True)
+                            + log_p_z.flatten(start_dim=1).sum(-1, keepdim=True)
+                            - log_q_z.flatten(start_dim=1).sum(-1, keepdim=True)
+                        )
+                        neg_likelihood_transformed.append(neg_logpx_z.sum() / recon_x.size(0))
         print(
             "logpx transformed",
             sum(neg_likelihood_transformed) / len(neg_likelihood_transformed),
         )
-        eq_err_all_traverse0 = []
-        eq_err_all_traverse1 = []
-        eq_err_all_traverse2 = []
-        eq_err_all_traverse3 = []
-        eq_err_all_traverse4 = []
-        eq_err_all_traverse5 = []
-        eq_err_all_traverse6 = []
-        # for index in range(0, 5):
-        for i, (data, index) in enumerate(self.data_loader):
-            index = index[0]
-            next_index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-            self.data_loader.dataset.index = next_index
-            with torch.no_grad():
-                if self.use_cuda:
-                    data = [t.cuda() for t in data]
-                x = data[0]
-                _, _, _, z = generator(x)
-            eq_loss_traverse0 = 0.0
-            eq_loss_traverse1 = 0.0
-            eq_loss_traverse2 = 0.0
-            eq_loss_traverse3 = 0.0
-            eq_loss_traverse4 = 0.0
-            eq_loss_traverse5 = 0.0
-            eq_loss_traverse6 = 0.0
-            for t in range(1, self.params.num_support_dipoles // 2):
+        eq_err_all = []
+        for index in range(0, 3):
+            for i, (x, y) in enumerate(self.data_loader):
                 with torch.no_grad():
-                    x_t = data[t]
-                    recon_xt, _, _, _ = generator(x_t)
+                    if self.use_cuda:
+                        x = mnist_color(x.cuda())
+                x_seq = x
                 with torch.no_grad():
-                    img_shifted = generator.inference(z)
-                if index == 0:
-                    eq_loss_traverse0 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-                elif index == 1:
-                    eq_loss_traverse1 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-                elif index == 2:
-                    eq_loss_traverse2 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-                elif index == 3:
-                    eq_loss_traverse3 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-                elif index == 4:
-                    eq_loss_traverse4 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-                elif index == 5:
-                    eq_loss_traverse5 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-                elif index == 6:
-                    eq_loss_traverse6 += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
-            if index == 0:
-                eq_err_all_traverse0.append(eq_loss_traverse0)
-            elif index == 1:
-                eq_err_all_traverse1.append(eq_loss_traverse1)
-            elif index == 2:
-                eq_err_all_traverse2.append(eq_loss_traverse2)
-            elif index == 3:
-                eq_err_all_traverse3.append(eq_loss_traverse3)
-            elif index == 4:
-                eq_err_all_traverse4.append(eq_loss_traverse4)
-            elif index == 5:
-                eq_err_all_traverse5.append(eq_loss_traverse5)
-            elif index == 6:
-                eq_err_all_traverse6.append(eq_loss_traverse6)
-        print("eq err traverse 0", sum(eq_err_all_traverse0) / len(eq_err_all_traverse0))
-        print("eq err traverse 1", sum(eq_err_all_traverse1) / len(eq_err_all_traverse1))
-        print("eq err traverse 2", sum(eq_err_all_traverse2) / len(eq_err_all_traverse2))
-        print("eq err traverse 3", sum(eq_err_all_traverse3) / len(eq_err_all_traverse3))
-        print("eq err traverse 4", sum(eq_err_all_traverse4) / len(eq_err_all_traverse4))
-        print("eq err traverse 5", sum(eq_err_all_traverse5) / len(eq_err_all_traverse5))
-        print("eq err traverse 6", sum(eq_err_all_traverse6) / len(eq_err_all_traverse6))
+                    for t in range(1, self.params.num_support_dipoles // 2 + 1):
+                        x_t = mnist_trans(x, index, t)
+                        x_seq = torch.cat([x_seq, x_t], dim=1)
+                index_pred = reconstructor(x_seq, iter=100001)
+                recon_x, mean, log_var, z = generator(x)
+                eq_loss = 0.0
+                for t in range(1, self.params.num_support_dipoles // 2):
+                    with torch.no_grad():
+                        x_t = mnist_trans(x, index, t)
+                        recon_xt, _, _, _ = generator(x_t)
+                    _, shift, u_zz = support_sets.index_inference(
+                        index_pred, z, t * torch.ones(1, 1, requires_grad=True)
+                    )
+                    z += shift
+
+                    with torch.no_grad():
+                        img_shifted = generator.inference(z)
+                    eq_loss += (img_shifted.detach() - x_t).abs().sum() / x_t.size(0)
+                eq_err_all.append(eq_loss)
+            print("eq err", index, sum(eq_err_all) / len(eq_err_all))
+            print(index_pred[0])
+
         return None
