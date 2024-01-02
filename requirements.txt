@@ -5,3 +5,4 @@ pandas
 torch
 tensorboard
 h5py
+torchsummary

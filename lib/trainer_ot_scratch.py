@@ -16,6 +16,9 @@ from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, 
 from transforms import *
 from torch.distributions.normal import Normal
 from torch.autograd import grad
+from lib.DiffPDE import DiffPDE
+from lib.HJPDE import HJPDE
+from vae import ConvVAE
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -164,7 +167,7 @@ class TrainerOTScratch(object):
         print("         ===================================================================")
         update_stdout(10)
 
-    def train(self, generator, support_sets, prior):
+    def train(self, generator: ConvVAE, support_sets: HJPDE, prior: DiffPDE):
         # Save initial `support_sets` model as `support_sets_init.pt`
         torch.save(support_sets.state_dict(), osp.join(self.models_dir, "support_sets_init.pt"))
 
@@ -224,7 +227,8 @@ class TrainerOTScratch(object):
                 support_sets.zero_grad()
                 # reconstructor.zero_grad() # TODO: maybe this is supposed to be generator.zero_grad()??
                 if self.use_cuda:
-                    x = mnist_color(x.cuda())
+                    x = x.cuda()
+                x = mnist_color(x)
 
                 index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
                 if hasattr(self.params, "num_support_dipoles"):

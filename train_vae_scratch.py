@@ -1,9 +1,11 @@
 import argparse
 import torch
-from vae import ConvVAE, ConvEncoder2
+from vae import ConvVAE
 from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision import transforms
+
+from torchsummary import summary
 
 from torch.utils.data import DataLoader
 from pathlib import Path
@@ -146,6 +148,9 @@ def main():
         G = ConvVAE(num_channel=3, latent_size=18 * 18, img_size=28)
         print("Intialize MNIST VAE")
         args.gan_type = "VAE_MNIST"
+        # the shape of MNIS samples is 1x28x28 (channel x height x width)
+        # using torch summary to check the model architecture
+        summary(G, (3, 28, 28))
 
     # Create output dir and save current arguments
     exp_dir = create_exp_dir(args)
