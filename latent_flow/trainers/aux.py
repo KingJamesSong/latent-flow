@@ -2,7 +2,7 @@ import sys
 import os
 import os.path as osp
 import json
-import argparse
+
 import numpy as np
 import torch
 import math
@@ -12,18 +12,13 @@ from PIL import Image, ImageDraw
 
 class TrainingStatTracker(object):
     def __init__(self):
-        self.stat_tracker = {
-            'classification_loss': [],
-            'regression_loss': [],
-            'pde_loss': [],
-            'total_loss': []
-        }
+        self.stat_tracker = {"classification_loss": [], "regression_loss": [], "pde_loss": [], "total_loss": []}
 
-    def update(self, accuracy_index, accuracy_time, classification_loss, regression_loss, wave_loss, total_loss):
-        self.stat_tracker['classification_loss'].append(float(classification_loss))
-        self.stat_tracker['regression_loss'].append(float(regression_loss))
-        self.stat_tracker['pde_loss'].append(float(wave_loss))
-        self.stat_tracker['total_loss'].append(float(total_loss))
+    def update(self, classification_loss, regression_loss, pde_loss, total_loss):
+        self.stat_tracker["classification_loss"].append(float(classification_loss))
+        self.stat_tracker["regression_loss"].append(float(regression_loss))
+        self.stat_tracker["pde_loss"].append(float(pde_loss))
+        self.stat_tracker["total_loss"].append(float(total_loss))
 
     def get_means(self):
         stat_means = dict()
@@ -70,36 +65,52 @@ def create_exp_dir(args):
 
     """
     exp_dir = "{}".format(args.gan_type)
-    if args.gan_type == 'StyleGAN2':
-        exp_dir += '-{}'.format(args.stylegan2_resolution)
+    if args.gan_type == "StyleGAN2":
+        exp_dir += "-{}".format(args.stylegan2_resolution)
         if args.shift_in_w_space:
-            exp_dir += '-W'
+            exp_dir += "-W"
         else:
-            exp_dir += '-Z'
-    if args.gan_type == 'BigGAN':
-        biggan_classes = '-'
+            exp_dir += "-Z"
+    if args.gan_type == "BigGAN":
+        biggan_classes = "-"
         for c in args.biggan_target_classes:
-            biggan_classes += '{}'.format(c)
-        exp_dir += '{}'.format(biggan_classes)
-    exp_dir += "-{}".format(args.reconstructor_type)
-    exp_dir += "-K{}-D{}".format(args.num_support_sets, args.num_support_dipoles)
-    if args.learn_alphas:
-        exp_dir += '-LearnAlphas'
-    if args.learn_gammas:
-        exp_dir += '-LearnGammas'
-    exp_dir += "-eps{}_{}".format(args.min_shift_magnitude, args.max_shift_magnitude)
+            biggan_classes += "{}".format(c)
+        exp_dir += "{}".format(biggan_classes)
+    if hasattr(args, "reconstructor_type"):
+        exp_dir += "-{}".format(args.reconstructor_type)
+    if hasattr(args, "num_support_sets") and hasattr(args, "num_support_dipoles"):
+        exp_dir += "-K{}-D{}".format(args.num_support_sets, args.num_support_dipoles)
+    if hasattr(args, "learn_alphas") and args.learn_alphas:
+        exp_dir += "-LearnAlphas"
+    if hasattr(args, "learn_gammas") and args.learn_gammas:
+        exp_dir += "-LearnGammas"
+    if hasattr(args, "min_shift_magnitude") and hasattr(args, "max_shift_magnitude"):
+        exp_dir += "-eps{}_{}".format(args.min_shift_magnitude, args.max_shift_magnitude)
+
+    # Add a counter to the experiment directory name
+    counter = 0
+    while True:
+        temp_exp_dir = "{}_{}".format(exp_dir, counter)
+        wip_dir_exists = osp.exists(osp.join("experiments", "wip", temp_exp_dir))
+        complete_dir_exists = osp.exists(osp.join("experiments", "complete", temp_exp_dir))
+        if wip_dir_exists or complete_dir_exists:
+            counter += 1
+        else:
+            exp_dir = temp_exp_dir
+            break
 
     # Create output directory (wip)
     wip_dir = osp.join("experiments", "wip", exp_dir)
     os.makedirs(wip_dir, exist_ok=True)
+
     # Save args namespace object in json format
-    with open(osp.join(wip_dir, 'args.json'), 'w') as args_json_file:
+    with open(osp.join(wip_dir, "args.json"), "w") as args_json_file:
         json.dump(args.__dict__, args_json_file)
 
     # Save the given command in a bash script file
-    with open(osp.join(wip_dir, 'command.sh'), 'w') as command_file:
-        command_file.write('#!/usr/bin/bash\n')
-        command_file.write(' '.join(sys.argv) + '\n')
+    with open(osp.join(wip_dir, "command.sh"), "w") as command_file:
+        command_file.write("#!/usr/bin/bash\n")
+        command_file.write(" ".join(sys.argv) + "\n")
 
     return exp_dir
 
@@ -107,13 +118,14 @@ def create_exp_dir(args):
 def update_progress(msg, total, progress):
     bar_length, status = 20, ""
     progress = float(progress) / float(total)
-    if progress >= 1.:
+    if progress >= 1.0:
         progress, status = 1, "\r\n"
     block = int(round(bar_length * progress))
-    block_symbol = u"\u2588"
-    empty_symbol = u"\u2591"
-    text = "\r{}{} {:.0f}% {}".format(msg, block_symbol * block + empty_symbol * (bar_length - block),
-                                      round(progress * 100, 0), status)
+    block_symbol = "\u2588"
+    empty_symbol = "\u2591"
+    text = "\r{}{} {:.0f}% {}".format(
+        msg, block_symbol * block + empty_symbol * (bar_length - block), round(progress * 100, 0), status
+    )
     sys.stdout.write(text)
     sys.stdout.flush()
 
@@ -125,8 +137,8 @@ def update_stdout(num_lines):
         num_lines (int): number of lines
 
     """
-    cursor_up = '\x1b[1A'
-    erase_line = '\x1b[1A'
+    cursor_up = "\x1b[1A"
+    erase_line = "\x1b[1A"
     for _ in range(num_lines):
         print(cursor_up + erase_line)
 
@@ -175,8 +187,16 @@ def get_wh(img_paths):
         raise ValueError("Inconsistent image resolutions in {}".format(img_paths))
 
 
-def create_summarizing_gif(imgs_root, gif_filename, num_imgs=None, gif_size=None, gif_fps=30, gap=15, progress_bar_h=15,
-                           progress_bar_color=(252, 186, 3)):
+def create_summarizing_gif(
+    imgs_root,
+    gif_filename,
+    num_imgs=None,
+    gif_size=None,
+    gif_fps=30,
+    gap=15,
+    progress_bar_h=15,
+    progress_bar_color=(252, 186, 3),
+):
     """Create a summarizing GIF image given an images root directory (images generated across a certain latent path) and
     the number of images to appear as a static sequence. The resolution of the resulting GIF image will be
     ((num_imgs + 1) * gif_size, gif_size). That is, a static sequence of `num_imgs` images will be depicted in front of
@@ -213,7 +233,7 @@ def create_summarizing_gif(imgs_root, gif_filename, num_imgs=None, gif_size=None
     # Get paths of static images
     static_imgs = []
     for i in range(0, len(path_images), math.ceil(len(path_images) / num_imgs)):
-        static_imgs.append(osp.join(imgs_root, '{:06}.jpg'.format(i)))
+        static_imgs.append(osp.join(imgs_root, "{:06}.jpg".format(i)))
     num_imgs = len(static_imgs)
 
     # Get GIF image resolution
@@ -223,7 +243,7 @@ def create_summarizing_gif(imgs_root, gif_filename, num_imgs=None, gif_size=None
         gif_w, gif_h = get_wh(static_imgs)
 
     # Create PIL static image
-    static_img_pil = Image.new('RGB', size=(len(static_imgs) * gif_w, gif_h))
+    static_img_pil = Image.new("RGB", size=(len(static_imgs) * gif_w, gif_h))
     for i in range(len(static_imgs)):
         static_img_pil.paste(Image.open(static_imgs[i]).resize((gif_w, gif_h)), (i * gif_w, 0))
 
@@ -231,7 +251,7 @@ def create_summarizing_gif(imgs_root, gif_filename, num_imgs=None, gif_size=None
     gif_frames = []
     for i in range(len(path_images)):
         # Create new PIL frame
-        gif_frame_pil = Image.new('RGB', size=((num_imgs + 1) * gif_w + gap, gif_h), color=(255, 255, 255))
+        gif_frame_pil = Image.new("RGB", size=((num_imgs + 1) * gif_w + gap, gif_h), color=(255, 255, 255))
 
         # Paste static image
         gif_frame_pil.paste(static_img_pil, (0, 0))
@@ -243,18 +263,15 @@ def create_summarizing_gif(imgs_root, gif_filename, num_imgs=None, gif_size=None
         if progress_bar_h > 0:
             gif_frame_pil_drawing = ImageDraw.Draw(gif_frame_pil)
             progress = (i / len(path_images)) * gif_w
-            gif_frame_pil_drawing.rectangle(xy=[num_imgs * gif_w + gap, gif_h - progress_bar_h,
-                                                num_imgs * gif_w + gap + progress, gif_h],
-                                            fill=progress_bar_color)
+            gif_frame_pil_drawing.rectangle(
+                xy=[num_imgs * gif_w + gap, gif_h - progress_bar_h, num_imgs * gif_w + gap + progress, gif_h],
+                fill=progress_bar_color,
+            )
 
         # Append to GIF frames list
         gif_frames.append(gif_frame_pil)
 
     # Save GIF file
     gif_frames[0].save(
-        fp=gif_filename,
-        append_images=gif_frames[1:],
-        save_all=True,
-        optimize=False,
-        loop=0,
-        duration=1000 // gif_fps)
+        fp=gif_filename, append_images=gif_frames[1:], save_all=True, optimize=False, loop=0, duration=1000 // gif_fps
+    )

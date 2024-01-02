@@ -11,7 +11,7 @@ if $tensorboard ; then
   tb="--tensorboard"
 fi
 
-python train_vae_scratch.py $tb \
+python latent_flow/train_vae_scratch.py $tb \
                 --num-support-sets=${num_support_sets} \
                 --num-timesteps=${num_timesteps} \
                 --batch-size=${batch_size} \

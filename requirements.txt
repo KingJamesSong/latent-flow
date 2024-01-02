@@ -1,0 +1,8 @@
+packaging
+kornia==0.7.0
+numpy
+pandas
+torch
+tensorboard
+h5py
+torchsummary
