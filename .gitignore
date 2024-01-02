@@ -163,3 +163,4 @@ cython_debug/
 # custom for this project
 data
 experiments
+.vscode
