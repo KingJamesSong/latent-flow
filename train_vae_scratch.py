@@ -109,9 +109,6 @@ def main():
     # Parse given arguments
     args = parser.parse_args()
 
-    # Create output dir and save current arguments
-    exp_dir = create_exp_dir(args)
-
     # CUDA
     use_cuda = False
     multi_gpu = False
@@ -137,9 +134,14 @@ def main():
         G = ConvVAE(num_channel=3, latent_size=15 * 15 + 1, img_size=64)
         G.load_state_dict(torch.load("vae_shapes3d.pt", map_location="cpu"))
         print("Initialize Shapes3D VAE")
+        args.gan_type = "VAE_Shapes"
     else:
         G = ConvVAE(num_channel=3, latent_size=18 * 18, img_size=28)
         print("Intialize MNIST VAE")
+        args.gan_type = "VAE_MNIST"
+
+    # Create output dir and save current arguments
+    exp_dir = create_exp_dir(args)
 
     # Build PDEs
     print("#. Build Support Sets S...")
@@ -160,16 +162,10 @@ def main():
     )
 
     # Count number of trainable parameters
-    print(
-        "  \\__Trainable parameters: {:,}".format(
-            sum(p.numel() for p in S.parameters() if p.requires_grad)
-        )
-    )
+    print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in S.parameters() if p.requires_grad)))
 
     print("MNIST DATASET LOADING")
-    dataset = MNIST(
-        root="data", train=True, transform=transforms.ToTensor(), download=True
-    )
+    dataset = MNIST(root="data", train=True, transform=transforms.ToTensor(), download=True)
     data_loader = DataLoader(
         dataset=dataset,
         batch_size=args.batch_size,

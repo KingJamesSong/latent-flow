@@ -76,17 +76,33 @@ def create_exp_dir(args):
         for c in args.biggan_target_classes:
             biggan_classes += "{}".format(c)
         exp_dir += "{}".format(biggan_classes)
-    exp_dir += "-{}".format(args.reconstructor_type)
-    exp_dir += "-K{}-D{}".format(args.num_support_sets, args.num_support_dipoles)
-    if args.learn_alphas:
+    if hasattr(args, "reconstructor_type"):
+        exp_dir += "-{}".format(args.reconstructor_type)
+    if hasattr(args, "num_support_sets") and hasattr(args, "num_support_dipoles"):
+        exp_dir += "-K{}-D{}".format(args.num_support_sets, args.num_support_dipoles)
+    if hasattr(args, "learn_alphas") and args.learn_alphas:
         exp_dir += "-LearnAlphas"
-    if args.learn_gammas:
+    if hasattr(args, "learn_gammas") and args.learn_gammas:
         exp_dir += "-LearnGammas"
-    exp_dir += "-eps{}_{}".format(args.min_shift_magnitude, args.max_shift_magnitude)
+    if hasattr(args, "min_shift_magnitude") and hasattr(args, "max_shift_magnitude"):
+        exp_dir += "-eps{}_{}".format(args.min_shift_magnitude, args.max_shift_magnitude)
+
+    # Add a counter to the experiment directory name
+    counter = 0
+    while True:
+        temp_exp_dir = "{}_{}".format(exp_dir, counter)
+        wip_dir_exists = osp.exists(osp.join("experiments", "wip", temp_exp_dir))
+        complete_dir_exists = osp.exists(osp.join("experiments", "complete", temp_exp_dir))
+        if wip_dir_exists or complete_dir_exists:
+            counter += 1
+        else:
+            exp_dir = temp_exp_dir
+            break
 
     # Create output directory (wip)
     wip_dir = osp.join("experiments", "wip", exp_dir)
     os.makedirs(wip_dir, exist_ok=True)
+
     # Save args namespace object in json format
     with open(osp.join(wip_dir, "args.json"), "w") as args_json_file:
         json.dump(args.__dict__, args_json_file)
