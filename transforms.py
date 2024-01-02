@@ -10,15 +10,15 @@ class To_Color(object):
         pass
 
     def __call__(self, tensor):
-        """
-        """
-        #tensor_rgb = transforms.functional.to_tensor(tensor).repeat(3, 1, 1)
-        #tensor_rgb[1:] = 0.0
+        """ """
+        # tensor_rgb = transforms.functional.to_tensor(tensor).repeat(3, 1, 1)
+        # tensor_rgb[1:] = 0.0
 
-        #return transforms.functional.to_pil_image(tensor_rgb)
+        # return transforms.functional.to_pil_image(tensor_rgb)
         tensor_rgb = tensor.repeat(1, 3, 1, 1)
-        tensor_rgb[:,1:] = 0.0
+        tensor_rgb[:, 1:] = 0.0
         return tensor_rgb
+
     def __repr__(self):
         format_string = self.__class__.__name__
         return format_string
@@ -45,7 +45,7 @@ class AddRandomTransformationDims(object):
         bsz_colors = torch.ones(x.shape[0], device=x.device)
         bsz_scales = torch.ones(x.shape[0], 2, device=x.device)
         if transform_type == 0:
-            M = kornia.get_rotation_matrix2d(center, bsz_angles*0.0, bsz_scales * scale).to(x.device)
+            M = kornia.get_rotation_matrix2d(center, bsz_angles * 0.0, bsz_scales * scale).to(x.device)
             x_t = kornia.warp_affine(x, M, dsize=(h, w))
         elif transform_type == 1:
             M = kornia.get_rotation_matrix2d(center, bsz_angles * angle, bsz_scales).to(x.device)
@@ -53,7 +53,6 @@ class AddRandomTransformationDims(object):
         elif transform_type == 2:
             x_t = kornia.enhance.adjust_hue(x, bsz_colors * color)
         return x_t
-
 
 
 class AddDualTransformationDims(object):
@@ -101,9 +100,7 @@ class AddDualTransformationDims(object):
 
 
 def get_rad(theta, phi, gamma):
-    return (deg_to_rad(theta),
-            deg_to_rad(phi),
-            deg_to_rad(gamma))
+    return (deg_to_rad(theta), deg_to_rad(phi), deg_to_rad(gamma))
 
 
 def deg_to_rad(deg):
@@ -111,8 +108,8 @@ def deg_to_rad(deg):
 
 
 class ImageTransformer(object):
-    """ Perspective transformation class for image
-        with shape (c, height, width) """
+    """Perspective transformation class for image
+    with shape (c, height, width)"""
 
     def __init__(self, shape):
         self.bsz = shape[0]
@@ -128,7 +125,7 @@ class ImageTransformer(object):
 
         # Get ideal focal length on z axis
         # NOTE: Change this section to other axis if needed
-        d = np.sqrt(self.height ** 2 + self.width ** 2)
+        d = np.sqrt(self.height**2 + self.width**2)
         self.focal = d / (2 * np.sin(rgamma) if np.sin(rgamma) != 0 else 1)
         dz = self.focal
 
@@ -146,40 +143,27 @@ class ImageTransformer(object):
         f = self.focal
 
         # Projection 2D -> 3D matrix
-        A1 = np.array([[1, 0, -w / 2],
-                       [0, 1, -h / 2],
-                       [0, 0, 1],
-                       [0, 0, 1]])
+        A1 = np.array([[1, 0, -w / 2], [0, 1, -h / 2], [0, 0, 1], [0, 0, 1]])
 
         # Rotation matrices around the X, Y, and Z axis
-        RX = np.array([[1, 0, 0, 0],
-                       [0, np.cos(theta), -np.sin(theta), 0],
-                       [0, np.sin(theta), np.cos(theta), 0],
-                       [0, 0, 0, 1]])
+        RX = np.array(
+            [[1, 0, 0, 0], [0, np.cos(theta), -np.sin(theta), 0], [0, np.sin(theta), np.cos(theta), 0], [0, 0, 0, 1]]
+        )
 
-        RY = np.array([[np.cos(phi), 0, -np.sin(phi), 0],
-                       [0, 1, 0, 0],
-                       [np.sin(phi), 0, np.cos(phi), 0],
-                       [0, 0, 0, 1]])
+        RY = np.array([[np.cos(phi), 0, -np.sin(phi), 0], [0, 1, 0, 0], [np.sin(phi), 0, np.cos(phi), 0], [0, 0, 0, 1]])
 
-        RZ = np.array([[np.cos(gamma), -np.sin(gamma), 0, 0],
-                       [np.sin(gamma), np.cos(gamma), 0, 0],
-                       [0, 0, 1, 0],
-                       [0, 0, 0, 1]])
+        RZ = np.array(
+            [[np.cos(gamma), -np.sin(gamma), 0, 0], [np.sin(gamma), np.cos(gamma), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        )
 
         # Composed rotation matrix with (RX, RY, RZ)
         R = np.dot(np.dot(RX, RY), RZ)
 
         # Translation matrix
-        T = np.array([[1, 0, 0, dx],
-                      [0, 1, 0, dy],
-                      [0, 0, 1, dz],
-                      [0, 0, 0, 1]])
+        T = np.array([[1, 0, 0, dx], [0, 1, 0, dy], [0, 0, 1, dz], [0, 0, 0, 1]])
 
         # Projection 3D -> 2D matrix
-        A2 = np.array([[f, 0, w / 2, 0],
-                       [0, f, h / 2, 0],
-                       [0, 0, 1, 0]])
+        A2 = np.array([[f, 0, w / 2, 0], [0, f, h / 2, 0], [0, 0, 1, 0]])
 
         # Final transformation matrix
         return np.dot(A2, np.dot(T, np.dot(R, A1)))
