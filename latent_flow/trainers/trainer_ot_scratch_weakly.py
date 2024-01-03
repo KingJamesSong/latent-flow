@@ -12,17 +12,17 @@ from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tensorboard import program
-from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
+from latent_flow.trainers.aux import TrainingStatTracker, update_progress, update_stdout, sec2dhms
 
-# from transforms import *
+from latent_flow.datasets.transforms import AddRandomTransformationDims, To_Color
 from torch.distributions.normal import Normal
 from torch.autograd import grad
 
 angle_set = [0, 10, 20, 30, 40, 50, 60, 70, 80]
 color_set = [180, 200, 220, 240, 260, 280, 300, 320, 340]
 scale_set = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]
-# mnist_trans = AddRandomTransformationDims(angle_set=angle_set, color_set=color_set, scale_set=scale_set)
-# mnist_color = To_Color()
+mnist_trans = AddRandomTransformationDims(angle_set=angle_set, color_set=color_set, scale_set=scale_set)
+mnist_color = To_Color()
 
 
 def idx2onehot(idx, n):
