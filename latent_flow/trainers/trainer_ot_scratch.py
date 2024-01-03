@@ -16,7 +16,9 @@ from latent_flow.trainers.aux import sample_z, TrainingStatTracker, update_progr
 
 from torch.distributions.normal import Normal
 from torch.autograd import grad
-
+from latent_flow.models.vae import ConvVAE
+from latent_flow.models.DiffPDE import DiffPDE
+from latent_flow.models.HJPDE import HJPDE
 from latent_flow.datasets.transforms import AddRandomTransformationDims, To_Color
 
 torch.autograd.set_detect_anomaly(True)
