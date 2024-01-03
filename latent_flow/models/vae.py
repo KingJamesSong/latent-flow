@@ -134,9 +134,8 @@ class ConvEncoder2(nn.Module):
 
     def reparameterize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
-        # eps = torch.randn_like(std)
-        tn = TruncNormal(mu, std)
-        return tn.rsample(mu)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
 
 class ConvDecoder2(nn.Module):
