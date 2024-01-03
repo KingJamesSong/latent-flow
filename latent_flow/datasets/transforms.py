@@ -45,12 +45,23 @@ class AddRandomTransformationDims(object):
         bsz_colors = torch.ones(x.shape[0], device=x.device)
         bsz_scales = torch.ones(x.shape[0], 2, device=x.device)
         if transform_type == 0:
-            M = kornia.get_rotation_matrix2d(center, bsz_angles * 0.0, bsz_scales * scale).to(x.device)
-            x_t = kornia.warp_affine(x, M, dsize=(h, w))
+            # scale transformation
+            M = kornia.geometry.transform.get_rotation_matrix2d(
+                center,
+                bsz_angles * 0.0,
+                bsz_scales * scale,
+            ).to(x.device)
+            x_t = kornia.geometry.transform.warp_affine(x, M, dsize=(h, w))
         elif transform_type == 1:
-            M = kornia.get_rotation_matrix2d(center, bsz_angles * angle, bsz_scales).to(x.device)
-            x_t = kornia.warp_affine(x, M, dsize=(h, w))
+            # rotation transformation
+            M = kornia.geometry.transform.get_rotation_matrix2d(
+                center,
+                bsz_angles * angle,
+                bsz_scales,
+            ).to(x.device)
+            x_t = kornia.geometry.transform.warp_affine(x, M, dsize=(h, w))
         elif transform_type == 2:
+            # color transformation
             x_t = kornia.enhance.adjust_hue(x, bsz_colors * color)
         return x_t
 
@@ -85,10 +96,10 @@ class AddDualTransformationDims(object):
             bsz_scales = torch.ones(x.shape[0]) * scale
 
             # compute the transformation matrix
-            M = kornia.get_rotation_matrix2d(center, bsz_angles, bsz_scales).to(x.device)
+            M = kornia.geometry.transform.get_rotation_matrix2d(center, bsz_angles, bsz_scales).to(x.device)
 
             # apply the transformation to original image
-            x_t = kornia.warp_affine(x, M, dsize=(h, w))
+            x_t = kornia.geometry.transform.warp_affine(x, M, dsize=(h, w))
 
             if c == 3:
                 # Apply color rotation
@@ -147,30 +158,13 @@ class ImageTransformer(object):
 
         # Rotation matrices around the X, Y, and Z axis
         RX = np.array(
-            [
-                [1, 0, 0, 0],
-                [0, np.cos(theta), -np.sin(theta), 0],
-                [0, np.sin(theta), np.cos(theta), 0],
-                [0, 0, 0, 1],
-            ]
+            [[1, 0, 0, 0], [0, np.cos(theta), -np.sin(theta), 0], [0, np.sin(theta), np.cos(theta), 0], [0, 0, 0, 1]]
         )
 
-        RY = np.array(
-            [
-                [np.cos(phi), 0, -np.sin(phi), 0],
-                [0, 1, 0, 0],
-                [np.sin(phi), 0, np.cos(phi), 0],
-                [0, 0, 0, 1],
-            ]
-        )
+        RY = np.array([[np.cos(phi), 0, -np.sin(phi), 0], [0, 1, 0, 0], [np.sin(phi), 0, np.cos(phi), 0], [0, 0, 0, 1]])
 
         RZ = np.array(
-            [
-                [np.cos(gamma), -np.sin(gamma), 0, 0],
-                [np.sin(gamma), np.cos(gamma), 0, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1],
-            ]
+            [[np.cos(gamma), -np.sin(gamma), 0, 0], [np.sin(gamma), np.cos(gamma), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
         )
 
         # Composed rotation matrix with (RX, RY, RZ)
@@ -227,7 +221,7 @@ class AddPerspectiveTransformationDims(object):
 
             if c == 3:
                 # Apply color rotation
-                x_t = kornia.color.adjust_hue(x_t, bsz_colors)
+                x_t = kornia.enhance.adjust_hue(x_t, bsz_colors)
 
             x_expanded[:, t_i, :, :] = x_t
 

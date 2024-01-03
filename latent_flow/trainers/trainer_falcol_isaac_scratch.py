@@ -178,10 +178,10 @@ class TrainerFalcolIsaacScratch(object):
         )
 
         # Set VAE optimizer
-        vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.reconstructor_lr)
+        vae_optimizer = torch.optim.Adam(generator.parameters(), lr=self.params.generator_lr)
 
         # Get starting iteration
-        starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator, prior)
+        starting_iter = self.get_starting_iteration(support_sets, generator, generator, prior)
 
         # Parallelize `generator` into multiple GPUs, if available and `multi_gpu=True`.
         if self.multi_gpu:
@@ -221,13 +221,13 @@ class TrainerFalcolIsaacScratch(object):
                 # Set gradients to zero
                 vae_optimizer.zero_grad()
                 support_sets.zero_grad()
-                reconstructor.zero_grad()
+                # reconstructor.zero_grad()
                 if self.use_cuda:
                     data = [t.cuda() for t in data]
                 x = data[0]
 
                 iter_t0 = time.time()
-                half_range = self.params.num_support_dipoles // 2
+                half_range = self.params.num_timesteps // 2
 
                 recon_x, mean, log_var, z = generator(x)
                 # prior probability
@@ -333,7 +333,7 @@ class TrainerFalcolIsaacScratch(object):
 
     def eval(self, generator, support_sets, prior):
         neg_likelihood = []
-        starting_iter = self.get_starting_iteration(support_sets, reconstructor, generator, prior)
+        starting_iter = self.get_starting_iteration(support_sets, generator, generator, prior)
         support_sets.eval()
         generator.eval()
         prior.eval()
@@ -370,7 +370,7 @@ class TrainerFalcolIsaacScratch(object):
                 q = Normal(mean, std)
                 log_q_z = q.log_prob(z)
                 log_p_z = prior_z0.log_prob(z)
-            for t in range(1, self.params.num_support_dipoles // 2):
+            for t in range(1, self.params.num_timesteps // 2):
                 x_t = data[t]
                 time_stamp = t * torch.ones(1, 1, requires_grad=True)
                 _, uz, uzz = support_sets.inference(index, z, time_stamp)
@@ -415,7 +415,7 @@ class TrainerFalcolIsaacScratch(object):
             eq_loss_traverse4 = 0.0
             eq_loss_traverse5 = 0.0
             eq_loss_traverse6 = 0.0
-            for t in range(1, self.params.num_support_dipoles // 2):
+            for t in range(1, self.params.num_timesteps // 2):
                 with torch.no_grad():
                     x_t = data[t]
                     recon_xt, _, _, _ = generator(x_t)

@@ -232,11 +232,8 @@ class TrainerOTScratch(object):
                 x = mnist_color(x)
 
                 index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-                if hasattr(self.params, "num_support_dipoles"):
-                    half_range = self.params.num_support_dipoles // 2
-                else:
-                    # default sets to max possible value
-                    half_range = mnist_trans.max_step - 1
+                half_range = self.params.num_timesteps // 2
+
                 # If you want to have x_0 start with different angle/color/scale
                 # x = mnist_trans(x, torch.randint(0, self.params.num_support_sets,(1,1)), torch.randint(0, half_range//2,(1,1)) )
                 recon_x, mean, log_var, z = generator(x)
@@ -373,7 +370,7 @@ class TrainerOTScratch(object):
                     log_q_z = q.log_prob(z)
                     log_p_z = prior_z0.log_prob(z)
                     # z_prior = z.clone()
-                for t in range(1, self.params.num_support_dipoles // 2):
+                for t in range(1, self.params.num_timesteps // 2):
                     with torch.no_grad():
                         x_t = mnist_trans(x, index, t)
                         _, mean_xt, log_var_xt, _ = generator(x_t)
@@ -403,7 +400,7 @@ class TrainerOTScratch(object):
                         x = mnist_color(x.cuda())
                 recon_x, mean, log_var, z = generator(x)
                 eq_loss = 0.0
-                for t in range(1, self.params.num_support_dipoles // 2):
+                for t in range(1, self.params.num_timesteps // 2):
                     with torch.no_grad():
                         x_t = mnist_trans(x, index, t)
                         _, mean_xt, log_var_xt, _ = generator(x_t)

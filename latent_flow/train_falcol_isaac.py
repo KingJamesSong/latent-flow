@@ -11,6 +11,7 @@ from latent_flow.datasets.Isaac3D import Isaac3D
 from latent_flow.models.vae import ConvVAE2
 from latent_flow.models.DiffPDE import DiffPDE
 from latent_flow.models.HJPDE import HJPDE
+from latent_flow.trainers.trainer_falcol_isaac_scratch import TrainerFalcolIsaacScratch
 
 
 def main():
@@ -86,7 +87,7 @@ def main():
                 torchvision.transforms.ToTensor(),
             ]
         )
-        dataset = Isaac3D(root="/nfs/data_chaos/ysong/Isaac3D_down128/images", train=True, transform=train_tx)
+        dataset = Isaac3D(root="./data/Isaac3D_down128/images", train=True, transform=train_tx)
         data_loader = DataLoader(
             dataset=dataset,
             batch_size=args.batch_size,
@@ -94,7 +95,7 @@ def main():
             drop_last=True,
             generator=torch.Generator(device="cuda"),
         )
-        trn = TrainerFlowScratch(
+        trn = TrainerFalcolIsaacScratch(
             params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu, data_loader=data_loader
         )
 
@@ -105,7 +106,7 @@ def main():
             ]
         )
         print("FALOR DATASET LOADING")
-        dataset = Falor3D(root="/nfs/data_chaos/ysong/Falcor3D_down128/images", train=True, transform=train_tx)
+        dataset = Falor3D(root="./data/Falcor3D_down128/images", train=True, transform=train_tx)
         data_loader = DataLoader(
             dataset=dataset,
             batch_size=args.batch_size,
@@ -113,7 +114,7 @@ def main():
             drop_last=True,
             generator=torch.Generator(device="cuda"),
         )
-        trn = TrainerFlowScratch(
+        trn = TrainerFalcolIsaacScratch(
             params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu, data_loader=data_loader
         )
 

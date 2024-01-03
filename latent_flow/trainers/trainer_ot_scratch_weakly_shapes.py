@@ -280,7 +280,7 @@ class TrainerOTScratchWeaklyShapes(object):
                 # Generate one-hot index
                 onehot_idx = torch.zeros(x.size(0), self.params.num_support_sets, requires_grad=False)
                 onehot_idx[:, index] = 1.0
-                half_range = self.params.num_support_dipoles // 2
+                half_range = self.params.num_timesteps // 2
                 recon_x, mean, log_var, z = generator(x)
                 # prior distribution
                 std = torch.exp(log_var / 2.0)
@@ -457,7 +457,7 @@ class TrainerOTScratchWeaklyShapes(object):
                 q = Normal(mean, std)
                 log_q_z = q.log_prob(z)
                 log_p_z = prior_z0.log_prob(z)
-            for t in range(1, self.params.num_support_dipoles // 2):
+            for t in range(1, self.params.num_timesteps // 2):
                 x_t = data[t]
                 time_stamp = t * torch.ones(1, 1, requires_grad=True)
                 _, uz, uzz = support_sets.inference(index, z, time_stamp)
@@ -500,7 +500,7 @@ class TrainerOTScratchWeaklyShapes(object):
             x = data[0]
             x_seq = x
             with torch.no_grad():
-                for t in range(1, self.params.num_support_dipoles // 2 + 1):
+                for t in range(1, self.params.num_timesteps // 2 + 1):
                     x_t = data[t]
                     x_seq = torch.cat([x_seq, x_t], dim=1)
             index_pred = reconstructor(x_seq, iter=100001)
@@ -510,7 +510,7 @@ class TrainerOTScratchWeaklyShapes(object):
             # eq_loss = 0.0
             # eq_loss_traverse = 0.0
             # rho_z = prob_zt.log_prob(z)
-            for t in range(1, self.params.num_support_dipoles // 2 + 1):
+            for t in range(1, self.params.num_timesteps // 2 + 1):
                 with torch.no_grad():
                     x_t = data[t]
                     recon_xt, _, _, _ = generator(x_t)
