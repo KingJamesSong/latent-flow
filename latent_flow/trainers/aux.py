@@ -55,7 +55,7 @@ def create_exp_dir(args):
     Experiment's directory name format:
 
         <gan_type>(-<stylegan2_resolution>)(-{Z,W})-<reconstructor_type>-K<num_support_sets>-
-            D<num_support_dipoles>(-LearnAlphas)(-LearnGammas)-eps<min_shift_magnitude>_<max_shift_magnitude>
+            D<num_timesteps>(-LearnAlphas)(-LearnGammas)-eps<min_shift_magnitude>_<max_shift_magnitude>
     E.g.:
 
         experiments/wip/ProgGAN-ResNet-K200-N32-LearnGammas-eps0.35_0.5
@@ -78,8 +78,8 @@ def create_exp_dir(args):
         exp_dir += "{}".format(biggan_classes)
     if hasattr(args, "reconstructor_type"):
         exp_dir += "-{}".format(args.reconstructor_type)
-    if hasattr(args, "num_support_sets") and hasattr(args, "num_support_dipoles"):
-        exp_dir += "-K{}-D{}".format(args.num_support_sets, args.num_support_dipoles)
+    if hasattr(args, "num_support_sets") and hasattr(args, "num_timesteps"):
+        exp_dir += "-K{}-D{}".format(args.num_support_sets, args.num_timesteps)
     if hasattr(args, "learn_alphas") and args.learn_alphas:
         exp_dir += "-LearnAlphas"
     if hasattr(args, "learn_gammas") and args.learn_gammas:

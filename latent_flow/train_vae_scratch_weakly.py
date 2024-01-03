@@ -73,7 +73,7 @@ def main():
     # Build PDEs
     print("#. Build PDEs...")
     print("  \\__Number of Support Sets    : {}".format(args.num_support_sets))
-    print("  \\__Number of Support Dipoles : {}".format(args.num_support_dipoles))
+    print("  \\__Number of Support Dipoles : {}".format(args.num_timesteps))
     print("  \\__Support Vectors dim       : {}".format(G.latent_size))
 
     S = HJPDE(num_support_sets=args.num_support_sets, num_timesteps=args.timesteps, support_vectors_dim=G.latent_size)
@@ -102,7 +102,7 @@ def main():
                 torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ]
         )
-        dataset = Shapes3D(root="/nfs/data_lambda/ysong/3dshapes.h5", train=True, transform=None)
+        dataset = Shapes3D(root="./data/ysong/3dshapes.h5", train=True, transform=None)
         # train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
         data_loader = DataLoader(
             dataset=dataset,
@@ -122,9 +122,9 @@ def main():
     else:
         print("MNIST DATASET LOADING")
         # train_loader, val_loader, test_loader = preprocessor.get_dataloaders(batch_size=data_config['batch_size'])
-        dataset = MNIST(root="/nfs/data_lambda/ysong/", train=True, transform=transforms.ToTensor(), download=True)
+        dataset = MNIST(root="./data/ysong/", train=True, transform=transforms.ToTensor(), download=True)
         # train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
-        # dataset = DSprites(root='/nfs/data_chaos/ysong/simplegan_experiments/dataset', transform=transforms.ToTensor())
+        # dataset = DSprites(root='./data/simplegan_experiments/dataset', transform=transforms.ToTensor())
         data_loader = DataLoader(
             dataset=dataset,
             batch_size=args.batch_size,
