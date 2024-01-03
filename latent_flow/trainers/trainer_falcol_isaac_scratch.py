@@ -12,7 +12,7 @@ from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tensorboard import program
-from .aux import sample_z, TrainingStatTracker, update_progress, update_stdout, sec2dhms
+from latent_flow.trainers.aux import TrainingStatTracker, update_progress, update_stdout, sec2dhms
 
 from torch.distributions.normal import Normal
 from torch.autograd import grad
