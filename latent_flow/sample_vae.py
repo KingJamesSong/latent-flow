@@ -52,9 +52,7 @@ def main():
     else:
         out_dir = osp.join(
             out_dir,
-            "{}_{}".format(
-                args.gan_type + biggan_classes if args.gan_type == "BigGAN" else args.gan_type, args.num_samples
-            ),
+            "{}_{}".format(args.gan_type, args.num_samples),
         )
     os.makedirs(out_dir, exist_ok=True)
 
