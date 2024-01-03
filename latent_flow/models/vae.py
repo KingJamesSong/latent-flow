@@ -12,6 +12,7 @@ class View(nn.Module):
     def forward(self, tensor):
         return tensor.view(self.size)
 
+
 def idx2onehot(idx, n):
     assert torch.max(idx).item() < n
 
@@ -54,15 +55,14 @@ def gumbel_softmax(logits, temperature, categorical_dim, hard=False):
     return y_hard.view(-1, categorical_dim)
 
 
-#VAE models for MNIST and Shapes3D
+# VAE models for MNIST and Shapes3D
 class ConvVAE(nn.Module):
-
     def __init__(self, num_channel, latent_size, img_size):
         super().__init__()
 
         self.latent_size = latent_size
-        self.encoder = ConvEncoder2(n_cin=num_channel,s_dim=latent_size,n_hw=img_size)
-        self.decoder = ConvDecoder2(n_cout=num_channel,s_dim=latent_size,n_hw=img_size)
+        self.encoder = ConvEncoder2(n_cin=num_channel, s_dim=latent_size, n_hw=img_size)
+        self.decoder = ConvDecoder2(n_cout=num_channel, s_dim=latent_size, n_hw=img_size)
 
     def forward(self, x):
         means, log_var = self.encoder(x)
@@ -80,9 +80,8 @@ class ConvVAE(nn.Module):
         return recon_x
 
 
-#VAE models for Falcol3D and Isaac3D
+# VAE models for Falcol3D and Isaac3D
 class ConvVAE2(nn.Module):
-
     def __init__(self, num_channel, latent_size, img_size):
         super().__init__()
 
@@ -106,9 +105,7 @@ class ConvVAE2(nn.Module):
         return recon_x
 
 
-
 class ConvEncoder2(nn.Module):
-
     def __init__(self, s_dim, n_cin, n_hw):
         super().__init__()
 
@@ -116,9 +113,9 @@ class ConvEncoder2(nn.Module):
         self.encoder = nn.Sequential(
             nn.Conv2d(n_cin, s_dim, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim*2, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(s_dim, s_dim * 2, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(s_dim * 2, s_dim * 3, kernel_size=(n_hw//4), stride=1, padding=0),
+            nn.Conv2d(s_dim * 2, s_dim * 3, kernel_size=(n_hw // 4), stride=1, padding=0),
             nn.ReLU(True),
             nn.Conv2d(s_dim * 3, s_dim * 2, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
@@ -137,13 +134,12 @@ class ConvEncoder2(nn.Module):
 
     def reparameterize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
-        #eps = torch.randn_like(std)
-        tn = TruncNormal(mu,std)
+        # eps = torch.randn_like(std)
+        tn = TruncNormal(mu, std)
         return tn.rsample(mu)
 
 
 class ConvDecoder2(nn.Module):
-
     def __init__(self, s_dim, n_cout, n_hw):
         super().__init__()
 
@@ -151,11 +147,11 @@ class ConvDecoder2(nn.Module):
             nn.Linear(s_dim, s_dim),  # B, 256
             View((-1, s_dim, 1, 1)),  # B, 256,  1,  1
             nn.ReLU(True),
-            nn.ConvTranspose2d(s_dim, s_dim * 2,kernel_size=1, stride=1, padding=0),
+            nn.ConvTranspose2d(s_dim, s_dim * 2, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
-            nn.ConvTranspose2d(s_dim * 2, s_dim * 3,kernel_size=1, stride=1, padding=0),
+            nn.ConvTranspose2d(s_dim * 2, s_dim * 3, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
-            nn.ConvTranspose2d(s_dim * 3, s_dim * 2 ,kernel_size=(n_hw//4), stride=1, padding=0),
+            nn.ConvTranspose2d(s_dim * 3, s_dim * 2, kernel_size=(n_hw // 4), stride=1, padding=0),
             nn.ReLU(True),
             nn.ConvTranspose2d(s_dim * 2, s_dim, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),
@@ -167,10 +163,10 @@ class ConvDecoder2(nn.Module):
         x = self.decoder(z)
 
         return x
-        
-#Encoder with Gumbel-Softmax trick
-class ConvEncoder3(nn.Module):
 
+
+# Encoder with Gumbel-Softmax trick
+class ConvEncoder3(nn.Module):
     def __init__(self, s_dim, n_cin, n_hw, latent_size):
         super().__init__()
 
@@ -201,10 +197,10 @@ class ConvEncoder3(nn.Module):
             self.temp = np.maximum(self.temp_ini * np.exp(-self.ANNEAL_RATE * iter), self.temp_min)
         z = gumbel_softmax(x, temperature=self.temp, categorical_dim=self.latent_size, hard=True)
         return z
-        #return F.softmax(z,dim=-1)
+        # return F.softmax(z,dim=-1)
+
 
 class ConvEncoder4(nn.Module):
-
     def __init__(self, s_dim, n_cin, n_hw):
         super().__init__()
 
@@ -218,7 +214,7 @@ class ConvEncoder4(nn.Module):
             nn.ReLU(True),
             nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim , kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),
             nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU(True),
@@ -226,7 +222,7 @@ class ConvEncoder4(nn.Module):
             nn.ReLU(True),
             nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=(n_hw//16), stride=1, padding=0),
+            nn.Conv2d(s_dim, s_dim, kernel_size=(n_hw // 16), stride=1, padding=0),
             nn.ReLU(True),
             nn.Conv2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
@@ -237,7 +233,6 @@ class ConvEncoder4(nn.Module):
         self.linear_log_var = nn.Linear(s_dim, s_dim)
 
     def forward(self, x):
-
         x = self.encoder(x)
         x = x.view(-1, self.s_dim)
         means = self.linear_means(x)
@@ -246,14 +241,13 @@ class ConvEncoder4(nn.Module):
         return means, log_vars
 
     def reparameterize(self, mu, log_var):
-
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
 
         return mu + eps * std
 
-class ConvDecoder4(nn.Module):
 
+class ConvDecoder4(nn.Module):
     def __init__(self, s_dim, n_cout, n_hw):
         super().__init__()
 
@@ -261,11 +255,11 @@ class ConvDecoder4(nn.Module):
             nn.Linear(s_dim, s_dim),  # B, 256
             View((-1, s_dim, 1, 1)),  # B, 256,  1,  1
             nn.ReLU(True),
-            nn.ConvTranspose2d(s_dim, s_dim,kernel_size=1, stride=1, padding=0),
+            nn.ConvTranspose2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
-            nn.ConvTranspose2d(s_dim, s_dim,kernel_size=1, stride=1, padding=0),
+            nn.ConvTranspose2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
-            nn.ConvTranspose2d(s_dim, s_dim ,kernel_size=(n_hw//16), stride=1, padding=0),
+            nn.ConvTranspose2d(s_dim, s_dim, kernel_size=(n_hw // 16), stride=1, padding=0),
             nn.ReLU(True),
             nn.ConvTranspose2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),

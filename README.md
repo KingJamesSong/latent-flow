@@ -18,16 +18,71 @@ NeurIPS23 "[Flow Factorized Representation Learning](https://arxiv.org/abs/2309.
 ## Overview
 
 <p align="center">
-<img src="surface.jpg" width="500px"/>
+<img src="imgs/surface.jpg" width="500px"/>
 <br>
 Illustration of our flow factorized representation learning: at each point in the latent space we have a distinct set of tangent directions ∇uk which define different transformations we would like to model in the image space. For each path, the latent sample evolves to the target on the potential landscape following dynamic optimal transport.
 </p>
 
 <p align="center">
-<img src="graphical_model.png" width="800px"/>
+<img src="imgs/graphical_model.png" width="800px"/>
 <br>
 Depiction of our model in plate notation. (Left) Supervised, (Right) Weakly-supervised. White nodes denote latent variables, shaded nodes denote observed variables, solid lines denote the generative model, and dashed lines denote the approximate posterior. We see, as in a standard VAE framework, our model approximates the initial one-step posterior p(z0|x0), but additionally approximates the conditional transition distribution p(zt|zt−1, k) through dynamic optimal transport over a potential landscape.
 </p>
+
+## Setup
+First, clone the repository and navigate into it:
+
+```bash
+git clone https://github.com/KingJamesSong/latent-flow.git
+cd latent-flow
+```
+
+We recommend setting up a new conda environment for this project. You can do this using the following command:
+
+```bash
+conda create --name latent-flow-env python=3.11
+conda activate latent-flow-env
+```
+
+Next, install the necessary dependencies. This project requires PyTorch. You can find the installation instructions on the [PyTorch setup page](https://pytorch.org/get-started/locally/).
+
+
+After installing PyTorch, install the remaining dependencies from the `requirements.txt` file:
+
+```bash
+pip install -r requirements.txt
+```
+
+For development purposes, you may also want to install the dependencies listed in `requirements_dev.txt`:
+
+```bash
+pip install -r requirements_dev.txt
+```
+It is recommended to set your IDEs autoformatter to use *black* and to enable "format on save".
+
+Finally, install the package itself. If you plan on modifying the code, install it in editable mode using the `-e` option:
+
+```bash
+pip install -e .
+```
+This will allow your changes to be immediately reflected in the installed package.
+
+The code assumes that all datasets are placed in the `./data` folder. This folder is going to be created automatically if necessary. 
+However, if you'd like to use a different folder for your datasets, you can create a symbolic link to that folder. This can be done using the following commands:
+
+For Unix-based systems (Linux, MacOS), use the `ln` command:
+```bash
+ln -s /path/to/your/dataset/folder ./data
+```
+This command creates a symbolic link named `./data` that points to `/path/to/your/dataset/folder`.
+
+For Windows systems, use the `mklink` command:
+```cmd
+mklink /D .\data C:\path\to\your\dataset\folder
+```
+This command creates a symbolic link named `.\data` that points to `C:\path\to\your\dataset\folder`.
+
+Please replace `/path/to/your/dataset/folder` and `C:\path\to\your\dataset\folder` with the actual path to your dataset folder.
 
 ## Usage
 

@@ -3,12 +3,13 @@ import os.path as osp
 import argparse
 import torch
 import json
+import numpy as np
 from torch import nn
 from hashlib import sha1
 from torchvision.transforms import ToPILImage
-from lib import *
-from vae import VAE, ConvVAE, ConvVAE2
-import numpy as np
+
+from latent_flow.models.vae import ConvVAE, ConvVAE2
+from latent_flow.trainers.aux import sample_z, update_progress, update_stdout
 
 
 def tensor2image(tensor, adaptive=False):
@@ -31,14 +32,13 @@ class DataParallelPassthrough(nn.DataParallel):
 
 
 def main():
-   
     parser = argparse.ArgumentParser(description="Sample a  VAE latent space and generate images")
-    parser.add_argument('-v', '--verbose', action='store_true', help="set verbose mode on")
-    parser.add_argument('-g', '--gan-type', type=str, required=True, help='VAE model type')
-    parser.add_argument('--num-samples', type=int, default=4, help="number of latent codes to sample")
-    parser.add_argument('--pool', type=str, help="name of latent codes/images pool")
-    parser.add_argument('--cuda', dest='cuda', action='store_true', help="use CUDA during training")
-    parser.add_argument('--no-cuda', dest='cuda', action='store_false', help="do NOT use CUDA during training")
+    parser.add_argument("-v", "--verbose", action="store_true", help="set verbose mode on")
+    parser.add_argument("-g", "--gan-type", type=str, required=True, help="VAE model type")
+    parser.add_argument("--num-samples", type=int, default=4, help="number of latent codes to sample")
+    parser.add_argument("--pool", type=str, help="name of latent codes/images pool")
+    parser.add_argument("--cuda", dest="cuda", action="store_true", help="use CUDA during training")
+    parser.add_argument("--no-cuda", dest="cuda", action="store_false", help="do NOT use CUDA during training")
     parser.set_defaults(cuda=True)
     # ================================================================================================================ #
 
@@ -46,38 +46,42 @@ def main():
     args = parser.parse_args()
 
     # Create output dir for generated images
-    out_dir = osp.join('experiments', 'latent_codes', args.gan_type)
+    out_dir = osp.join("experiments", "latent_codes", args.gan_type)
     if args.pool:
         out_dir = osp.join(out_dir, args.pool)
     else:
-        out_dir = osp.join(out_dir, '{}_{}'.format(args.gan_type + biggan_classes if args.gan_type == 'BigGAN'
-                                                   else args.gan_type, args.num_samples))
+        out_dir = osp.join(
+            out_dir,
+            "{}_{}".format(
+                args.gan_type + biggan_classes if args.gan_type == "BigGAN" else args.gan_type, args.num_samples
+            ),
+        )
     os.makedirs(out_dir, exist_ok=True)
 
     # Save argument in json file
-    with open(osp.join(out_dir, 'args.json'), 'w') as args_json_file:
+    with open(osp.join(out_dir, "args.json"), "w") as args_json_file:
         json.dump(args.__dict__, args_json_file)
 
     # Set default tensor type
     if torch.cuda.is_available():
         if args.cuda:
-            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+            torch.set_default_tensor_type("torch.cuda.FloatTensor")
         if not args.cuda:
-            print("*** WARNING ***: It looks like you have a CUDA device, but aren't using CUDA.\n"
-                  "                 Run with --cuda for optimal training speed.")
-            torch.set_default_tensor_type('torch.FloatTensor')
+            print(
+                "*** WARNING ***: It looks like you have a CUDA device, but aren't using CUDA.\n"
+                "                 Run with --cuda for optimal training speed."
+            )
+            torch.set_default_tensor_type("torch.FloatTensor")
     else:
-        torch.set_default_tensor_type('torch.FloatTensor')
+        torch.set_default_tensor_type("torch.FloatTensor")
     use_cuda = args.cuda and torch.cuda.is_available()
-    
 
-    if args.gan_type== 'VAE_MNIST':
-        G = ConvVAE(num_channel=3, latent_size=18*18, img_size=28)
-    elif args.gan_type== 'VAE_Shapes':
+    if args.gan_type == "VAE_MNIST":
+        G = ConvVAE(num_channel=3, latent_size=18 * 18, img_size=28)
+    elif args.gan_type == "VAE_Shapes":
         G = ConvVAE(num_channel=3, latent_size=15 * 15 + 1, img_size=64)
-    elif args.gan_type== 'VAE_FALOR' or args.gan_type== 'VAE_ISAAC':
-        G = ConvVAE2(num_channel=3, latent_size=18*18, img_size=128)
-  
+    elif args.gan_type == "VAE_FALOR" or args.gan_type == "VAE_ISAAC":
+        G = ConvVAE2(num_channel=3, latent_size=18 * 18, img_size=128)
 
     # Upload generator to GPU
     if use_cuda:
@@ -87,9 +91,8 @@ def main():
     G.eval()
 
     # Latent codes sampling
-    
+
     zs = sample_z(batch_size=args.num_samples, dim_z=G.latent_size, truncation=args.z_truncation)
-   
 
     if use_cuda:
         zs = zs.cuda()
@@ -107,21 +110,23 @@ def main():
         if args.verbose:
             update_progress(
                 "  \\__.Latent code hash: {} [{:03d}/{:03d}] ".format(latent_code_hash, i + 1, args.num_samples),
-                args.num_samples, i)
+                args.num_samples,
+                i,
+            )
 
         # Create directory for current latent code
-        latent_code_dir = osp.join(out_dir, '{}'.format(latent_code_hash))
+        latent_code_dir = osp.join(out_dir, "{}".format(latent_code_hash))
         os.makedirs(latent_code_dir, exist_ok=True)
 
         # Save latent code tensor under `latent_code_dir`
-        torch.save(z.cpu(), osp.join(latent_code_dir, 'latent_code.pt'))
+        torch.save(z.cpu(), osp.join(latent_code_dir, "latent_code.pt"))
 
         # Generate image for the given latent code z
         with torch.no_grad():
             img = G.inference(z).cpu()
         # Convert image's tensor into an RGB image and save it
         img_pil = tensor2image(img, adaptive=True)
-        img_pil.save(osp.join(latent_code_dir, 'image.jpg'), "JPEG", quality=95, optimize=True, progressive=True)
+        img_pil.save(osp.join(latent_code_dir, "image.jpg"), "JPEG", quality=95, optimize=True, progressive=True)
 
     if args.verbose:
         update_stdout(1)
@@ -129,5 +134,5 @@ def main():
         print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -12,7 +12,7 @@ if $tensorboard ; then
   tb="--tensorboard"
 fi
 
-python train_falcol_isaac.py $tb \
+python latent_flow/train_falcol_isaac.py $tb \
                 --num-support-sets=${num_support_sets} \
                 --num-timesteps=${num_timesteps} \
                 --batch-size=${batch_size} \
