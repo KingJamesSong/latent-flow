@@ -265,7 +265,7 @@ class TrainerOTScratchWeakly(object):
 
                 # Generate one-hot index
                 index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-                onehot_idx = torch.Tensor([1./self.params.num_support_sets, 1.0 - 1./self.params.num_support_sets]).to(z)
+                onehot_idx = torch.Tensor([1./self.params.num_support_sets, 1.0 - 1./self.params.num_support_sets]).to(x)
 
                 half_range = self.params.num_timesteps // 2
                 recon_x, mean, log_var, z = generator(x)
