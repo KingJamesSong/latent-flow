@@ -265,8 +265,7 @@ class TrainerOTScratchWeakly(object):
 
                 # Generate one-hot index
                 index = torch.randint(0, self.params.num_support_sets, (1, 1), requires_grad=False)
-                onehot_idx = torch.zeros(x.size(0), self.params.num_support_sets, requires_grad=False)
-                onehot_idx[:, index] = 1.0
+                onehot_idx = torch.Tensor([1./self.params.num_support_sets, 1.0 - 1./self.params.num_support_sets]).to(z)
 
                 half_range = self.params.num_timesteps // 2
                 recon_x, mean, log_var, z = generator(x)
@@ -285,8 +284,11 @@ class TrainerOTScratchWeakly(object):
                     x_seq = torch.cat([x_seq, x_t], dim=1)
                 index_pred = reconstructor(x_seq, iteration)
 
+                prob_one = torch.norm(index_pred, p=0) / index_pred.size(0) / index_pred.size(1)
+                prob_index = torch.Tensor([prob_one, 1.0 - prob_one]).to(z)
+
                 vae_loss = self.loss_fn(recon_x, x, mean, log_var) + self.kl_index(
-                    (index_pred + 1e-20).log(), (onehot_idx + 1e-20)
+                    (prob_index + 1e-20).log(), (onehot_idx + 1e-20)
                 )
 
                 for t in range(1, half_range + 1):
