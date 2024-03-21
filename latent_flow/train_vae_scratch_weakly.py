@@ -123,21 +123,28 @@ def main():
         print("MNIST DATASET LOADING")
         # train_loader, val_loader, test_loader = preprocessor.get_dataloaders(batch_size=data_config['batch_size'])
         dataset = MNIST(root="./data/ysong/", train=True, transform=transforms.ToTensor(), download=True)
-        # train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
-        # dataset = DSprites(root='./data/simplegan_experiments/dataset', transform=transforms.ToTensor())
-        data_loader = DataLoader(
-            dataset=dataset,
+        train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
+        data_loader_train = DataLoader(
+            dataset=train_set,
+            batch_size=args.batch_size,
+            shuffle=True,
+            drop_last=True,
+            generator=torch.Generator(device="cuda"),
+        )
+        data_loader_val = DataLoader(
+            dataset=val_set,
             batch_size=args.batch_size,
             shuffle=True,
             drop_last=True,
             generator=torch.Generator(device="cuda"),
         )
         trn = TrainerOTScratchWeakly(
-            params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu, data_loader=data_loader
+            params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu, data_loader=data_loader_train
         )
 
     # Train
     trn.train(generator=G, support_sets=S, reconstructor=R, prior=S_Prior)
+    trn.data_loader = data_loader_val
     trn.eval(generator=G, support_sets=S, reconstructor=R, prior=S_Prior)
 
 
