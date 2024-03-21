@@ -175,11 +175,19 @@ def main():
 
     print("MNIST DATASET LOADING")
     dataset = MNIST(root="data", train=True, transform=transforms.ToTensor(), download=True)
-    data_loader = DataLoader(
-        dataset=dataset,
+    train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), int(len(dataset) * 0.2)],generator=torch.Generator(device='cuda'))
+    data_loader_train = DataLoader(
+        dataset=train_set,
         batch_size=args.batch_size,
         shuffle=True,
         drop_last=True,
+        generator=torch.Generator(device=device),
+    )
+    data_loader_val = DataLoader(
+        dataset=val_set,
+        batch_size=args.batch_size,
+        shuffle=True,
+        drop_last=False,
         generator=torch.Generator(device=device),
     )
     trn = TrainerOTScratch(
@@ -187,11 +195,12 @@ def main():
         exp_dir=exp_dir,
         use_cuda=use_cuda,
         multi_gpu=multi_gpu,
-        data_loader=data_loader,
+        data_loader=data_loader_train,
     )
 
     # Train
     trn.train(generator=G, support_sets=S, prior=S_Prior)
+    trn.data_loader = data_loader_val
     trn.eval(generator=G, support_sets=S, prior=S_Prior)
 
 
