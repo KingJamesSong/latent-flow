@@ -278,7 +278,7 @@ class TrainerOTScratchWeaklyShapes(object):
                 x = data[0]
 
                 # Generate one-hot index
-                onehot_idx = torch.Tensor([1./self.params.num_support_sets, 1.0 - 1./self.params.num_support_sets]).to(x)
+
                 
                 half_range = self.params.num_timesteps // 2
                 recon_x, mean, log_var, z = generator(x)
@@ -296,11 +296,13 @@ class TrainerOTScratchWeaklyShapes(object):
                     x_seq = torch.cat([x_seq, x_t], dim=1)
                 index_pred = reconstructor(x_seq, iteration)
 
-                prob_one = torch.norm(index_pred, p=0) / index_pred.size(0) / index_pred.size(1)
-                prob_index = torch.Tensor([prob_one, 1.0 - prob_one]).to(z)
+                prob_one = torch.mean(index_pred, dim=0, keepdim=True)
+                onehot_idx = torch.zeros(1, self.params.num_support_sets).to(x)
+                _, max_index = prob_one.max(dim=1)
+                onehot_idx[:,max_index]=1.0
         
                 vae_loss = self.loss_fn(recon_x, x, mean, log_var) + self.kl_index(
-                    (prob_index + 1e-20).log(), (onehot_idx + 1e-20)
+                    (prob_one + 1e-20).log(), (onehot_idx + 1e-20)
                 )
 
                 for t in range(1, half_range + 1):
