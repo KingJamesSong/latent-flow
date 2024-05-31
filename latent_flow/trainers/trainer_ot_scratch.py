@@ -366,6 +366,7 @@ class TrainerOTScratch(object):
             for index in range(0, self.params.num_support_sets):
                 with torch.no_grad():
                     recon_x, mean, log_var, z = generator(x)
+                    std = torch.exp(log_var / 2.0)
                     q = Normal(mean, std)
                     log_q_z = q.log_prob(z)
                     log_p_z = prior_z0.log_prob(z)
@@ -406,7 +407,7 @@ class TrainerOTScratch(object):
                         _, mean_xt, log_var_xt, _ = generator(x_t)
                         std_xt = torch.exp(log_var_xt / 2.0)
                     _, shift, u_zz = support_sets.inference(
-                        index, z, t * torch.ones(1, 1, requires_grad=True), mean_xt, std_xt
+                        index, z, t * torch.ones(1, 1, requires_grad=True)
                     )
                     z += shift
                     with torch.no_grad():
