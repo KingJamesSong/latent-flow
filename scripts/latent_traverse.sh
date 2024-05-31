@@ -13,7 +13,7 @@ wait
 for exp in "${EXPERIMENTS[@]}"
 do
   # Traverse latent space
-  python traverse_latent_trunc_vae.py -v --gif \
+  python traverse_latent_space_vae.py -v --gif \
                                   --exp="${exp}" \
                                   --pool=${pool} \
                                   --eps=${eps} \
