@@ -3,7 +3,7 @@
 num_support_sets=3
 num_timesteps=16
 batch_size=128
-max_iter=100000
+max_iter=90000
 tensorboard=true
 
 tb=""
