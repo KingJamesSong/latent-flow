@@ -43,7 +43,7 @@ Depiction of our model in plate notation. (Left) Supervised, (Right) Weakly-supe
 <p align="center">
 <img src="imgs/teaser5.png" width="800px"/>
 <br>
-Overview of Sparse Transformation Analysis (STA): given an input sequence $\{\mathbf{x}_t\}_t^T$ containing some unknown combination of transformations, the model infers both an initial distribution over latent variables $q_{\theta}(\mathbf{z}_0|\mathbf{x}_0)$, and a sparse coefficient vector for each time-step $\vg_t  = \{g_t^0, g_t^1, \ldots, g_t^K\}$ which is used to linearly combine the K distinct learned vector fields $\mathbf{v}^k = (\nabla u^k + \vr^k)$ in order to compute the latent transformation from $\vz_t$ to $\vz_{t+1}$. Due to the sparsity of $\vg$, the model learns to disentangle the observed transformations into separate flow fields $\vv^k$ entirely unsupervised.
+Overview of Sparse Transformation Analysis (STA): given an input sequence $\{\mathbf{x}_t\}_t^T$ containing some unknown combination of transformations, the model infers both an initial distribution over latent variables $q_{\theta}(\mathbf{z}_0|\mathbf{x}_0)$, and a sparse coefficient vector for each time-step $\mathbf{g}_t  = \{g_t^0, g_t^1, \ldots, g_t^K\}$ which is used to linearly combine the K distinct learned vector fields $\mathbf{v}^k = (\nabla u^k + \mathbf{r}^k)$ in order to compute the latent transformation from $\mathbf{z}_t$ to $\mathbf{z}_{t+1}$. Due to the sparsity of $\mathbf{g}$, the model learns to disentangle the observed transformations into separate flow fields $\mathbf{v}^k$ entirely unsupervised.
 </p>
 
 ## Setup
