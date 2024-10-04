@@ -20,7 +20,7 @@ NeurIPS23 "[Flow Factorized Representation Learning](https://arxiv.org/abs/2309.
 
 **CityScape**
 | Latent Flow 1 |Latent Flow 2 |Latent Flow 3 |
-|:-------------------------------------------:|:-------------------------------------------:|:-------------------------------------------:|
+|:-------------------------:|:-------------------------:|:-------------------------:|
 |<img src="imgs/car_away.gif" width="64" height="64" /> |<img src="imgs/car_close.gif" width="64" height="64" />|<img src="imgs/turn_left.gif" width="64" height="64" />|
 
 
