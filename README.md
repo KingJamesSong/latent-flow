@@ -49,7 +49,7 @@ Overview of Sparse Transformation Analysis (STA): given an input sequence $\{\ma
 <p align="center">
 <img src="imgs/graphical_model_journal.png" width="800px"/>
 <br>
-Our model across $N$ sequences in plate notation (Left) and a detailed version with decomposed spike and slab components (Right). White nodes denote latent variables, shaded nodes denote observed variables, solid lines denote the generative model, and dashed lines denote the approximate posterior. Different from the spike component $\mathbf{y}_t$, the slab variable $\Tilde{\mathbf{g}}_t$ is independent across timesteps.
+Our model across $N$ sequences in plate notation (Left) and a detailed version with decomposed spike and slab components (Right). White nodes denote latent variables, shaded nodes denote observed variables, solid lines denote the generative model, and dashed lines denote the approximate posterior. Different from the spike component $\mathbf{y}_t$, the slab variable $\tilde{\mathbf{g}}_t$ is independent across timesteps.
 </p>
 
 ## Setup
