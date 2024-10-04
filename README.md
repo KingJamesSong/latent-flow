@@ -24,8 +24,9 @@ NeurIPS23 "[Flow Factorized Representation Learning](https://arxiv.org/abs/2309.
 |<img src="imgs/car_away.gif" width="64" height="64" /> |<img src="imgs/car_close.gif" width="64" height="64" />|<img src="imgs/turn_left.gif" width="64" height="64" />|
 
 
-## Overview
+## Overview 
 
+### Conference Version (Supervised and Weakly-Supervised)
 <p align="center">
 <img src="imgs/surface.jpg" width="500px"/>
 <br>
@@ -36,6 +37,13 @@ Illustration of our flow factorized representation learning: at each point in th
 <img src="imgs/graphical_model.png" width="800px"/>
 <br>
 Depiction of our model in plate notation. (Left) Supervised, (Right) Weakly-supervised. White nodes denote latent variables, shaded nodes denote observed variables, solid lines denote the generative model, and dashed lines denote the approximate posterior. We see, as in a standard VAE framework, our model approximates the initial one-step posterior p(z0|x0), but additionally approximates the conditional transition distribution p(zt|zt−1, k) through dynamic optimal transport over a potential landscape.
+</p>
+
+### Journal Version (Unsupervised)
+<p align="center">
+<img src="imgs/teaser5.png" width="800px"/>
+<br>
+Overview of Sparse Transformation Analysis (STA): given an input sequence $\{\mathbf{x}_t\}_t^T$ containing some unknown combination of transformations, the model infers both an initial distribution over latent variables $q_{\theta}(\mathbf{z}_0|\mathbf{x}_0)$, and a sparse coefficient vector for each time-step $\vg_t  = \{g_t^0, g_t^1, \ldots, g_t^K\}$ which is used to linearly combine the K distinct learned vector fields $\mathbf{v}^k = (\nabla u^k + \vr^k)$ in order to compute the latent transformation from $\vz_t$ to $\vz_{t+1}$. Due to the sparsity of $\vg$, the model learns to disentangle the observed transformations into separate flow fields $\vv^k$ entirely unsupervised.
 </p>
 
 ## Setup
