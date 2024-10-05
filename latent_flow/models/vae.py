@@ -33,6 +33,9 @@ def gumbel_softmax_sample(logits, temperature):
     y = logits + sample_gumbel(logits.size())
     return F.softmax(y / temperature, dim=-1)
 
+def gumbel_sigmoid_sample(logits, temperature):
+    y = logits + sample_gumbel(logits.size())
+    return F.sigmoid(y / temperature)
 
 def gumbel_softmax(logits, temperature, categorical_dim, hard=False):
     """
@@ -49,6 +52,28 @@ def gumbel_softmax(logits, temperature, categorical_dim, hard=False):
     _, ind = y.max(dim=-1)
     y_hard = torch.zeros_like(y).view(-1, shape[-1])
     y_hard.scatter_(1, ind.view(-1, 1), 1)
+    y_hard = y_hard.view(*shape)
+    # Set gradients w.r.t. y_hard gradients w.r.t. y
+    y_hard = (y_hard - y).detach() + y
+    return y_hard.view(-1, categorical_dim)
+
+def gumbel_sigmoid(logits, temperature, categorical_dim, hard=False):
+    """
+    ST-gumple-sigmoid
+    input: [*, n_class]
+    return: flatten --> [*, n_class] an binary vector
+    """
+    y = gumbel_sigmoid_sample(logits, temperature)
+
+    if not hard:
+        return y.view(-1, categorical_dim)
+    shape = y.size()
+    #_, ind = y.max(dim=-1)
+    y_hard = torch.zeros_like(y).view(-1, shape[-1])
+    y_hard[y>0.5]=1.0
+    #y_hard.scatter_(1, ind.view(y.size(0), -1), 1)
+    #for i in ind:
+    #    y_hard[:,i]=1.0
     y_hard = y_hard.view(*shape)
     # Set gradients w.r.t. y_hard gradients w.r.t. y
     y_hard = (y_hard - y).detach() + y
@@ -282,3 +307,49 @@ class ConvDecoder4(nn.Module):
         x = self.decoder(z)
 
         return x
+
+#Gumbel-Sigmoid Trick for Unsupervised case
+class ConvEncoder5_Unsuper(nn.Module):
+
+    def __init__(self, s_dim, n_cin, n_hw, latent_size):
+        super().__init__()
+
+        self.s_dim = s_dim
+        self.latent_size = latent_size
+        self.encoder = nn.Sequential(
+            nn.Conv2d(n_cin, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=(n_hw // 16), stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
+        )
+        self.temp_min = 0.05
+        self.ANNEAL_RATE = 0.00003
+        self.temp_ini = 1.0
+        self.temp = 1.0
+        self.linear1 = nn.Linear(s_dim, self.latent_size)
+
+    def forward(self, x, iter):
+        x = self.encoder(x)
+        x = x.view(-1, self.s_dim)
+        x = self.linear1(x)
+        if iter % 100 == 1:
+            self.temp = np.maximum(self.temp_ini * np.exp(-self.ANNEAL_RATE * iter), self.temp_min)
+        z = gumbel_sigmoid(x, temperature=self.temp, categorical_dim=self.latent_size, hard=True)
+        return z
