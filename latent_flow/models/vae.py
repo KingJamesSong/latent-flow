@@ -308,48 +308,55 @@ class ConvDecoder4(nn.Module):
 
         return x
 
-#Gumbel-Sigmoid Trick for Unsupervised case
-class ConvEncoder5_Unsuper(nn.Module):
+#Gumbel-sigmoid trick to infer spike and slab components
+class ConvEncoder3_Unsuper(nn.Module):
 
     def __init__(self, s_dim, n_cin, n_hw, latent_size):
         super().__init__()
 
         self.s_dim = s_dim
         self.latent_size = latent_size
-        self.encoder = nn.Sequential(
+        self.encoder =nn.Sequential(
             nn.Conv2d(n_cin, s_dim, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(s_dim, s_dim * 2, kernel_size=4, stride=2, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(s_dim * 2, s_dim * 3, kernel_size=(n_hw // 4), stride=1, padding=0),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(s_dim * 3, s_dim * 2, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=(n_hw // 16), stride=1, padding=0),
-            nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(True),
-            nn.Conv2d(s_dim, s_dim, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(s_dim * 2, s_dim, kernel_size=1, stride=1, padding=0),
         )
         self.temp_min = 0.05
         self.ANNEAL_RATE = 0.00003
         self.temp_ini = 1.0
         self.temp = 1.0
-        self.linear1 = nn.Linear(s_dim, self.latent_size)
+        #Spike infer
+        self.linear_y = nn.Linear(s_dim, self.latent_size)
+        #Slab infer
+        self.encoder_g = nn.Sequential(
+            nn.Conv2d(n_cin, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim * 2, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 2, s_dim * 3, kernel_size=(n_hw // 4), stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 3, s_dim * 2, kernel_size=1, stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 2, s_dim, kernel_size=1, stride=1, padding=0),
+        )
+        self.linear_g = nn.Linear(s_dim, self.latent_size)
+        self.act_g = nn.Sigmoid()
 
-    def forward(self, x, iter):
-        x = self.encoder(x)
-        x = x.view(-1, self.s_dim)
-        x = self.linear1(x)
+    def forward(self, input, iter):
         if iter % 100 == 1:
             self.temp = np.maximum(self.temp_ini * np.exp(-self.ANNEAL_RATE * iter), self.temp_min)
-        z = gumbel_sigmoid(x, temperature=self.temp, categorical_dim=self.latent_size, hard=True)
-        return z
+        x = self.encoder(input)
+        x = x.view(-1, self.s_dim)
+        z_temp1 = self.linear_y(x)
+        z1 = gumbel_sigmoid(z_temp1, temperature=self.temp, categorical_dim=self.latent_size, hard=False)
+
+        x_g = self.encoder_g(input)
+        x_g = x_g.view(-1, self.s_dim)
+        g = 2*self.act_g(self.linear_g(x_g))
+        return z1,g
