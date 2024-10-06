@@ -360,3 +360,65 @@ class ConvEncoder3_Unsuper(nn.Module):
         x_g = x_g.view(-1, self.s_dim)
         g = 2*self.act_g(self.linear_g(x_g))
         return z1,g
+
+#Gumbel-sigmoid trick to infer spike and slab components (two spike components for rotational and gradient fields)
+class ConvEncoder3_Unsuper2(nn.Module):
+
+    def __init__(self, s_dim, n_cin, n_hw, latent_size):
+        super().__init__()
+
+        self.s_dim = s_dim
+        self.latent_size = latent_size
+        self.encoder =nn.Sequential(
+            nn.Conv2d(n_cin, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim * 2, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 2, s_dim * 3, kernel_size=(n_hw // 4), stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 3, s_dim * 2, kernel_size=1, stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 2, s_dim, kernel_size=1, stride=1, padding=0),
+        )
+        self.temp_min = 0.05
+        self.ANNEAL_RATE = 0.00003
+        self.temp_ini = 1.0
+        self.temp = 1.0
+        self.linear_y1 = nn.Linear(s_dim, self.latent_size)
+        self.linear_y2 = nn.Linear(s_dim, self.latent_size)
+
+        self.encoder_g = nn.Sequential(
+            nn.Conv2d(n_cin, s_dim, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim, s_dim * 2, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 2, s_dim * 3, kernel_size=(n_hw // 4), stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 3, s_dim * 2, kernel_size=1, stride=1, padding=0),
+            nn.ReLU(True),
+            nn.Conv2d(s_dim * 2, s_dim, kernel_size=1, stride=1, padding=0),
+        )
+        self.linear_g = nn.Linear(s_dim, self.latent_size)
+        self.act_g = nn.Sigmoid()
+
+        #self.linear_g2 = nn.Linear(s_dim, self.latent_size)
+        #self.act_g2 = nn.Sigmoid()
+        #self.linear_gtilde_means = nn.Linear(s_dim, self.latent_size)
+        #self.linear_gtilde_vars = nn.Linear(s_dim, self.latent_size)
+        #self.linear1 = nn.ModuleList([nn.Linear(s_dim, 2) for i in range(self.latent_size)])
+
+    def forward(self, input, iter):
+        if iter % 100 == 1:
+            self.temp = np.maximum(self.temp_ini * np.exp(-self.ANNEAL_RATE * iter), self.temp_min)
+        x = self.encoder(input)
+        x = x.view(-1, self.s_dim)
+        z_temp1 = self.linear_y1(x)
+        z_temp2 = self.linear_y2(x)
+        z1 = gumbel_sigmoid(z_temp1, temperature=self.temp, categorical_dim=self.latent_size, hard=False)
+        z2 = gumbel_sigmoid(z_temp2, temperature=self.temp, categorical_dim=self.latent_size, hard=False)
+
+        x_g = self.encoder_g(input)
+        x_g = x_g.view(-1, self.s_dim)
+
+        g1 = 2 * self.act_g(self.linear_g(x_g))
+        return z1,z2,g1
