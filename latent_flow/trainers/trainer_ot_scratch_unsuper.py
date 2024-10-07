@@ -52,7 +52,7 @@ class DataParallelPassthrough(nn.DataParallel):
 
 
 class TrainerOTScratchUnsuper(object):
-    def __init__(self, params=None, exp_dir=None, use_cuda=False, multi_gpu=False,data_loader=None):
+    def __init__(self, params=None, exp_dir=None, use_cuda=False, multi_gpu=False,data_loader=None,single_control=False):
         if params is None:
             raise ValueError("Cannot build a Trainer instance with empty params: params={}".format(params))
         else:
@@ -60,7 +60,8 @@ class TrainerOTScratchUnsuper(object):
         self.use_cuda = use_cuda
         self.multi_gpu = multi_gpu
         self.data_loader=data_loader
-
+        self.single_control=single_control
+        
         # Use TensorBoard
         self.tensorboard = self.params.tensorboard
 
@@ -294,15 +295,23 @@ class TrainerOTScratchUnsuper(object):
                         x_pair = torch.cat([x_t, x_t1],dim=1)
 
                     #separate control of two vector fields, otherwise would be y,g = reconstructor(x_pair, iteration)
-                    y1,y2,g = reconstructor(x_pair, iteration)
-                    if iteration > swicth_iter:
-                        index_pred1,index_pred2 = y1*g,y2*g
-                    else:
-                        index_pred1,index_pred2 = y1,y2
-          
                     time_stamp = t * torch.ones(1, 1, requires_grad=True)
-                    energy, loss_wave_tmp, uz, uzz = support_sets.index_forward(index_pred1,index_pred2, z, time_stamp)
-                    _, _, _, uzz_prior = prior.index_forward(index_pred1 + index_pred2 - index_pred1 * index_pred2, z, time_stamp, rho)
+                    if self.single_control:
+                        y,g = reconstructor(x_pair, iteration)
+                        if iteration > swicth_iter:
+                            index_pred = y*g
+                        else:
+                            index_pred = y
+                        energy, loss_wave_tmp, uz, uzz = support_sets.index_forward_single(index_pred, z, time_stamp)
+                        _, _, _, uzz_prior = prior.index_forward(index_pred, z, time_stamp, rho)
+                    else:
+                        y1,y2,g = reconstructor(x_pair, iteration)
+                        if iteration > swicth_iter:
+                            index_pred1,index_pred2 = y1*g,y2*g
+                        else:
+                            index_pred1,index_pred2 = y1,y2
+                        energy, loss_wave_tmp, uz, uzz = support_sets.index_forward(index_pred1,index_pred2, z, time_stamp)
+                        _, _, _, uzz_prior = prior.index_forward(index_pred1 + index_pred2 - index_pred1 * index_pred2, z, time_stamp, rho)
                     rho_t = rho_t - (uzz+1).abs().log()
                     rho = rho - (uzz_prior+1).abs().log()
                     z = z + uz
@@ -316,15 +325,21 @@ class TrainerOTScratchUnsuper(object):
                     if t==1:
                         loss_wave = loss_wave_tmp
                         rho_loss1 = rho_loss1_tmp 
-                        y_set1 = y1
-                        y_set2 = y2
+                        if self.single_control:
+                            y_set1 = y
+                        else:
+                            y_set1 = y1
+                            y_set2 = y2
                         if iteration > swicth_iter:
                             g_set1 = g
                     else:
                         loss_wave += loss_wave_tmp
                         rho_loss1 += rho_loss1_tmp 
-                        y_set1 = torch.cat([y_set1, y1], dim=0)
-                        y_set2 = torch.cat([y_set2, y1], dim=0)
+                        if self.single_control:
+                            y_set1 = torch.cat([y_set1, y], dim=0)
+                        else:
+                            y_set1 = torch.cat([y_set1, y1], dim=0)
+                            y_set2 = torch.cat([y_set2, y1], dim=0)
                         if iteration > swicth_iter:
                             g_set1 = torch.cat([g_set1, g], dim=0)
                     #Update spike and slab
@@ -353,22 +368,29 @@ class TrainerOTScratchUnsuper(object):
                         target_porb = target_porb + intial_prob
                         intial_prob = (intial_prob*0.9 + (1-intial_prob)*0.1) + torch_binom(torch.FloatTensor([3.]).to(z), torch.FloatTensor([intial_prob*3]).to(z))*(0.1**(intial_prob*3))*(0.9**(3-intial_prob*3))*(1./3. + 2*0.1*0.9*1./3. + 0.01*1./3.)
 
-                #KL Term
-                prob_one1 = torch.norm(y_set1, p=0) / y_set1.size(0) / y_set1.size(1)
-                prob_k1 = torch.Tensor([prob_one1, 1.0 - prob_one1]).to(z)
-
-                prob_one2 = torch.norm(y_set2, p=0) / y_set2.size(0) / y_set2.size(1)
-                prob_k2 = torch.Tensor([prob_one2, 1.0 - prob_one2]).to(z)
                 #Spike loss
-                target_porb = target_porb / half_range * 2 / 3
-                target_k = torch.Tensor([target_porb, 1.0 - target_porb]).to(z)  
-                rho_loss1 = rho_loss1 + self.kl_index((prob_k1 + 1e-20).log(), target_k) + self.kl_index((prob_k2 + 1e-20).log(), target_k)
+                if self.single_control:
+                    prob_one1 = torch.norm(y_set1, p=0) / y_set1.size(0) / y_set1.size(1)
+                    prob_k1 = torch.Tensor([prob_one1, 1.0 - prob_one1]).to(z)
+                    target_porb = target_porb / half_range 
+                    target_k = torch.Tensor([target_porb, 1.0 - target_porb]).to(z)  
+                    rho_loss1 = rho_loss1 + self.kl_index((prob_k1 + 1e-20).log(), target_k)
+                else:
+                    prob_one1 = torch.norm(y_set1, p=0) / y_set1.size(0) / y_set1.size(1)
+                    prob_k1 = torch.Tensor([prob_one1, 1.0 - prob_one1]).to(z)
+    
+                    prob_one2 = torch.norm(y_set2, p=0) / y_set2.size(0) / y_set2.size(1)
+                    prob_k2 = torch.Tensor([prob_one2, 1.0 - prob_one2]).to(z)
+                    
+                    target_porb = target_porb / half_range * 2 / 3
+                    target_k = torch.Tensor([target_porb, 1.0 - target_porb]).to(z)  
+                    rho_loss1 = rho_loss1 + self.kl_index((prob_k1 + 1e-20).log(), target_k) + self.kl_index((prob_k2 + 1e-20).log(), target_k)
                 #Slab loss
                 if iteration > swicth_iter:
                     g_mean1 = g_set1.mean(dim=0)+1e-3
                     g_var1 = g_set1.var(dim=0) / z.size(0) / (half_range - 1) * (z.size(0) * half_range - 1)
                     g_var1 = torch.sqrt(0.5 * g_var1)+1e-3
-                    rho_loss1 = rho_loss1 + self.KL_loss_laplace(g_mean1,g_var1) #+ self.KL_loss_laplace(g_mean2,g_var2)
+                    rho_loss1 = rho_loss1 + self.KL_loss_laplace(g_mean1,g_var1) 
                 loss = vae_loss + rho_loss1 + loss_wave
                 self.stat_tracker.update(
                     accuracy_index=0.0, 
@@ -510,10 +532,15 @@ class TrainerOTScratchUnsuper(object):
                     with torch.no_grad():
                         x_t = x_t1
                         x_t1 = mnist_trans(x_t1, index, t)
-                        x_pair = torch.cat([x_t, x_t1], dim=1)                     
-                    y1,y2, g = reconstructor(x_pair,iter=70001)
-                    index_pred1, index_pred2= y1 * g, y2 * g
-                    _, shift, u_zz = support_sets.index_inference(index_pred1,index_pred2, z, t * torch.ones(1, 1, requires_grad=True))
+                        x_pair = torch.cat([x_t, x_t1], dim=1)
+                    if self.single_control:
+                        y1,y2, g = reconstructor(x_pair,iter=70001)
+                        index_pred1, index_pred2= y1 * g, y2 * g
+                        _, shift, u_zz = support_sets.index_inference(index_pred1,index_pred2, z, t * torch.ones(1, 1, requires_grad=True))
+                    else:
+                        y, g = reconstructor(x_pair,iter=70001)
+                        index_pred= y1, y2
+                        _, shift, u_zz = support_sets.index_inference_single(index_pred, z, t * torch.ones(1, 1, requires_grad=True))
                     z += shift
                     with torch.no_grad():
                         img_shifted = generator.inference(z)
