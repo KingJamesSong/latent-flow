@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--log-freq", default=10, type=int, help="set number iterations per log")
     parser.add_argument("--ckp-freq", default=1000, type=int, help="set number iterations per checkpoint model saving")
     parser.add_argument("--tensorboard", action="store_true", help="use tensorboard")
+    parser.add_argument("--single-control", type=bool, default=True)
     # === CUDA ======================================================================================================= #
     parser.add_argument("--cuda", dest="cuda", action="store_true", help="use CUDA during training")
     parser.add_argument("--no-cuda", dest="cuda", action="store_false", help="do NOT use CUDA during training")
@@ -82,8 +83,10 @@ def main():
     # Build transformation index predictor
     print("#. Build index predictor R...")
 
-    
-    R = ConvEncoder3_Unsuper2(s_dim=10 * 10,n_cin=3*2,n_hw=28,latent_size=3)
+    if args.single_control == True:
+        R = ConvEncoder3_Unsuper(s_dim=10 * 10,n_cin=3*2,n_hw=28,latent_size=3)
+    else:
+        R = ConvEncoder3_Unsuper2(s_dim=10 * 10,n_cin=3*2,n_hw=28,latent_size=3)
 
     # Count number of trainable parameters
     print("  \\__Trainable parameters: {:,}".format(sum(p.numel() for p in R.parameters() if p.requires_grad)))
@@ -107,7 +110,7 @@ def main():
         generator=torch.Generator(device="cuda"),
     )
     trn = TrainerOTScratchUnsuper(
-        params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu, data_loader=data_loader_train
+        params=args, exp_dir=exp_dir, use_cuda=use_cuda, multi_gpu=multi_gpu, data_loader=data_loader_train, single_control = args.single_control
     )
 
     # Train
