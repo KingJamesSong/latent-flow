@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--log-freq", default=10, type=int, help="set number iterations per log")
     parser.add_argument("--ckp-freq", default=1000, type=int, help="set number iterations per checkpoint model saving")
     parser.add_argument("--tensorboard", action="store_true", help="use tensorboard")
-    parser.add_argument("--single-control", type=bool, default=True)
+    parser.add_argument("--single-control", type=bool, default=False)
     # === CUDA ======================================================================================================= #
     parser.add_argument("--cuda", dest="cuda", action="store_true", help="use CUDA during training")
     parser.add_argument("--no-cuda", dest="cuda", action="store_false", help="do NOT use CUDA during training")
