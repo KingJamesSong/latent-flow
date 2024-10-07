@@ -115,7 +115,7 @@ class HJPDE2(nn.Module):
 
         return mse_pde, u_z, div_u, u, u_zz
 
-    #In case there is separate control on two vector fields, we have two index_pred, 
+    #Separate controls of  two flow fields
     def index_forward(self, index_pred1, index_pred2, z, t):
         mse_pde_t_index, u_z, u, u_zz = 0.0,0.0,0.0,0.0
         for index in range(self.num_support_sets):
@@ -130,6 +130,24 @@ class HJPDE2(nn.Module):
             for index in range(self.num_support_sets):
                 mse_ic_temp = self.loss_ic(self.MLP_SET[index], z)
                 mse_ic = (index_pred1[:,index:index+1].squeeze() * mse_ic_temp).mean()
+            loss_step += mse_ic
+        return u, loss_step, u_z, u_zz
+        
+    #Single control of both flow fields
+    def index_forward_single(self, index_pred, z, t):
+        mse_pde_t_index, u_z, u, u_zz = 0.0,0.0,0.0,0.0
+        for index in range(self.num_support_sets):
+            mse_pde_t_index_temp, u_z_temp, div_u_temp, u_temp, u_zz_temp = self.loss_pde(self.MLP_SET[index], z, t, self.DIV_MLP[index])
+            mse_pde_t_index += (index_pred[:,index:index+1].squeeze() * mse_pde_t_index_temp).mean()
+            u_z += index_pred[:,index:index+1] * u_z_temp + index_pred[:,index:index+1] * div_u_temp
+            u += index_pred[:,index:index+1] * u_temp
+            u_zz += index_pred[:,index:index+1] * u_zz_temp
+        loss_step = mse_pde_t_index
+        if t[0] == 1:
+            mse_ic = 0.0
+            for index in range(self.num_support_sets):
+                mse_ic_temp = self.loss_ic(self.MLP_SET[index], z)
+                mse_ic = (index_pred[:,index:index+1].squeeze() * mse_ic_temp).mean()
             loss_step += mse_ic
         return u, loss_step, u_z, u_zz
 
@@ -151,7 +169,7 @@ class HJPDE2(nn.Module):
         div_u = self.DIV_MLP[index](z)
 
         return u, u_z+div_u, u_zz
-
+    #Two controls
     def index_inference(self, index_pred1,index_pred2, z, t):
         z = z.clone().requires_grad_()
         t = t.clone().requires_grad_()
@@ -165,4 +183,20 @@ class HJPDE2(nn.Module):
             u_z+= index_pred1[:,index:index+1] * u_z_temp
             div_u += index_pred2[:,index:index+1] * div_u_temp
             u_zz+= index_pred1[:,index:index+1] * u_zz_temp
+        return u, u_z+div_u, u_zz
+        
+    #Single control
+    def index_inference(self, index_pred, z, t):
+        z = z.clone().requires_grad_()
+        t = t.clone().requires_grad_()
+        u, div_u, u_z, u_zz=0.0,0.0,0.0,0.0
+        for index in range(self.num_support_sets):
+            u_temp = self.MLP_SET[index](z, t)
+            div_u_temp = self.DIV_MLP[index](z)
+            u_z_temp = grad(u_temp.sum(), z, create_graph=True)[0]
+            u_zz_temp = grad(u_z_temp.sum(), z, create_graph=True)[0]
+            u+= index_pred[:,index:index+1] * u_temp
+            u_z+= index_pred[:,index:index+1] * u_z_temp
+            div_u += index_pred[:,index:index+1] * div_u_temp
+            u_zz+= index_pred[:,index:index+1] * u_zz_temp
         return u, u_z+div_u, u_zz
