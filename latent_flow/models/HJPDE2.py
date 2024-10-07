@@ -169,6 +169,7 @@ class HJPDE2(nn.Module):
         div_u = self.DIV_MLP[index](z)
 
         return u, u_z+div_u, u_zz
+        
     #Two controls
     def index_inference(self, index_pred1,index_pred2, z, t):
         z = z.clone().requires_grad_()
@@ -186,7 +187,7 @@ class HJPDE2(nn.Module):
         return u, u_z+div_u, u_zz
         
     #Single control
-    def index_inference(self, index_pred, z, t):
+    def index_inference_single(self, index_pred, z, t):
         z = z.clone().requires_grad_()
         t = t.clone().requires_grad_()
         u, div_u, u_z, u_zz=0.0,0.0,0.0,0.0
