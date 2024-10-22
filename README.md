@@ -111,6 +111,12 @@ Please replace `/path/to/your/dataset/folder` and `C:\path\to\your\dataset\folde
 
 Please check [the scripts folder](https://github.com/KingJamesSong/latent-flow/tree/main/scripts) for the training and evaluation codes.
 
+## Minimal Training Code fro Spike-and-Slab Prior
+
+Please check [latent_flow.py](https://github.com/KingJamesSong/latent-flow/blob/main/latent_flow.py) for the minimal training code of using the spike-and-slab prior.
+
+We pre-define 3 latent flow fields and you just need to use your own MLP for it.
+
 ## Citation
 
 If you think the code is helpful to your research, please consider citing our paper:
