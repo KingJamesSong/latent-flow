@@ -2,10 +2,7 @@
 
 NeurIPS23 "[Flow Factorized Representation Learning](https://arxiv.org/abs/2309.13167)" 
 
-[Yue Song](https://kingjamessong.github.io/)<sup>1,2</sup>, [T. Anderson Keller](https://scholar.google.com/citations?hl=en&user=Tb86kC0AAAAJ)<sup>1</sup>, [Nicu Sebe](https://scholar.google.com/citations?user=stFCYOAAAAAJ&hl=en)<sup>2</sup>, [Max Welling](https://scholar.google.com/citations?user=8200InoAAAAJ&hl=en)<sup>1</sup>  
-<sup>1</sup>University of Amsterdam, the Netherlands <br>
-<sup>2</sup>University of Trento, Italy <be> 
-
+T-PAMI Submission "[Unsupervised Representation Learning from Sparse Transformation Analysis](https://arxiv.org/abs/2410.05564)"
 
 
 
@@ -127,6 +124,12 @@ If you think the code is helpful to your research, please consider citing our pa
   author={Song, Yue and Keller, Andy and Sebe, Nicu and Welling, Max},
   booktitle={NeurIPS},
   year={2023}
+}
+@article{song2024unsupervised,
+  title={Unsupervised Representation Learning from Sparse Transformation Analysis},
+  author={Song, Yue and Keller, Thomas Anderson and Yue, Yisong and Perona, Pietro and Welling, Max},
+  journal={arXiv preprint arXiv:2410.05564},
+  year={2024}
 }
 ```
 
