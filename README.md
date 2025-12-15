@@ -2,7 +2,7 @@
 
 NeurIPS23 "[Flow Factorized Representation Learning](https://arxiv.org/abs/2309.13167)" 
 
-T-PAMI Submission "[Unsupervised Representation Learning from Sparse Transformation Analysis](https://arxiv.org/abs/2410.05564)"
+T-PAMI25 "[Unsupervised Representation Learning from Sparse Transformation Analysis](https://arxiv.org/abs/2410.05564)"
 
 
 
